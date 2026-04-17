@@ -7,33 +7,21 @@ def test_empty_shelf_list_at_startup(client):
     assert response.status_code == 200
     assert response.json() == []
 
-def test_get_shelf_by_id(client, session):
-    data: list[dict[str, Any]] = [
-        {"name": "fruits"},
-        {"name": "fromages"}
-    ]
-    session.add_all(Shelf(**data_sample) for data_sample in data)
-    session.commit()
-
+def test_get_shelf_by_id(client, session, seeded_db):
     response = client.get("/shelfs/1")
     assert response.status_code == 200
     assert response.json() == {
-        **data[0],
+        **seeded_db[Shelf][0],
         "id": 1
     }
 
-def test_singleton_shelf_list(client, session):
-    data: dict[str, Any] = {"name": "fromages"}
-    shelf = Shelf(**data)
-    session.add(shelf)
-    session.commit()
-
+def test_get_shelf_list(client, session, seeded_db):
     response = client.get("/shelfs")
     assert response.status_code == 200
     assert response.json() == [{
-        **data,
-        "id": 1
-    }]
+        **shelf,
+        "id": id + 1
+    } for id, shelf in enumerate(seeded_db[Shelf])]
 
 def test_create_shelf(client):
     body = {"name": "fromages"}
