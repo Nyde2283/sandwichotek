@@ -1,6 +1,7 @@
 import os
 import uvicorn
 from fastapi import FastAPI
+from .routers import misc
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -10,7 +11,9 @@ if APP_PORT is None:
 if None in (APP_HOST, APP_PORT):
     raise Exception("ERROR: missing environment variable APP_HOST or APP_PORT")
 
-app = FastAPI()
+app = FastAPI(swagger_ui_parameters={"operationsSorter": "method"})
+
+app.include_router(misc.router)
 
 def run_server():
     if APP_HOST is not None and APP_PORT is not None:
