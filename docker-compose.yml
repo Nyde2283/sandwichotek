@@ -38,5 +38,46 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
 
+  test-db:
+    image: postgres:17
+    profiles:
+      - test
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGPORT: 5433
+    ports:
+      - "5433:5433"
+    tmpfs:
+      - /var/lib/postgresql/data:size=1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 0.5s
+      timeout: 1s
+      retries: 20
+
+  test-backend:
+    build:
+      context: .
+      target: test
+    profiles:
+      - test
+    ports:
+      - "${TEST_APP_PORT}:${TEST_APP_PORT}"
+    volumes:
+      - ./src/backend:/sandwichotek/src/backend
+      - ./tests:/sandwichotek/tests
+    env_file:
+      - .env
+    depends_on:
+      test-db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=test-db
+      - DB_PORT=5433
+
 volumes:
   postgres_data:
