@@ -1,7 +1,11 @@
 import os
 import uvicorn
 from fastapi import FastAPI
-from .routers import misc
+from contextlib import asynccontextmanager
+
+from .db import init_db
+from .db.models import *
+from .routers import misc, shelfs
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -11,8 +15,17 @@ if APP_PORT is None:
 if None in (APP_HOST, APP_PORT):
     raise Exception("ERROR: missing environment variable APP_HOST or APP_PORT")
 
-app = FastAPI(swagger_ui_parameters={"operationsSorter": "method"})
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
+app = FastAPI(
+    lifespan=lifespan,
+    swagger_ui_parameters={"operationsSorter": "method"}
+)
+
+app.include_router(shelfs.router)
 app.include_router(misc.router)
 
 def run_server():
