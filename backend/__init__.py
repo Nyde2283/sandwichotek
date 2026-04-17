@@ -9,8 +9,6 @@ from .routers import misc, shelfs
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
-if APP_PORT is None:
-    APP_PORT = os.getenv("TEST_APP_PORT")
 
 if None in (APP_HOST, APP_PORT):
     raise Exception("ERROR: missing environment variable APP_HOST or APP_PORT")

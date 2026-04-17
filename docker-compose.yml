@@ -9,8 +9,9 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+      PGPORT: 5432
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +27,7 @@ services:
     profiles:
       - prod
     ports:
-      - "${APP_PORT}:${APP_PORT}"
+      - "${APP_PORT}:8000"
     volumes:
       - ./backend:/sandwichotek/backend
     env_file:
@@ -35,8 +36,9 @@ services:
       db:
         condition: service_healthy
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
+      DB_HOST: db
+      DB_PORT: 5432
+      APP_PORT: 8000
 
   test-db:
     image: postgres:17
@@ -50,7 +52,7 @@ services:
       POSTGRES_DB: ${DB_NAME}
       PGPORT: 5433
     ports:
-      - "5433:5433"
+      - "${TEST_DB_PORT}:5433"
     tmpfs:
       - /var/lib/postgresql/data:size=1G
     healthcheck:
@@ -66,7 +68,7 @@ services:
     profiles:
       - test
     ports:
-      - "${TEST_APP_PORT}:${TEST_APP_PORT}"
+      - "${TEST_APP_PORT}:8001"
     volumes:
       - ./backend:/sandwichotek/backend
       - ./tests:/sandwichotek/tests
@@ -76,8 +78,10 @@ services:
       test-db:
         condition: service_healthy
     environment:
-      - DB_HOST=test-db
-      - DB_PORT=5433
+      DB_HOST: test-db
+      DB_PORT: 5433
+      APP_HOST: ${TEST_APP_HOST}
+      APP_PORT: 8001
 
 volumes:
   postgres_data:
