@@ -1,3 +1,8 @@
+FROM python:3.14 AS graphviz-bin
+
+RUN apt-get update
+RUN apt-get -y install graphviz
+
 FROM python:3.14 AS release-env
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -19,6 +24,8 @@ FROM python:3.14 AS release
 # path needed to run uvicorn (server launcher)
 ENV PATH="/sandwichotek/.venv/bin:$PATH"
 
+COPY --from=graphviz-bin /usr/bin/dot /usr/bin/dot
+COPY --from=graphviz-bin /usr/lib/x86_64-linux-gnu/ /usr/lib/x86_64-linux-gnu/
 COPY --from=release-env /sandwichotek/.venv /sandwichotek/.venv
 
 RUN ln -s /bin/true /usr/local/bin/xdg-open
