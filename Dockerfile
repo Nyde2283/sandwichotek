@@ -34,7 +34,7 @@ COPY --from=release-env /sandwichotek/.venv /sandwichotek/.venv
 
 RUN ln -s /bin/true /usr/local/bin/xdg-open
 
-WORKDIR /sandwichotek/src
+WORKDIR /sandwichotek
 CMD ["python", "-m", "backend"]
 
 # ---------------------------------- TESTING --------------------------------- #

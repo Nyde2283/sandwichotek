@@ -1,6 +1,6 @@
 import pytest
 from typing import Any
-from src.backend.db.models import Shelf
+from backend.db.models import Shelf
 
 def test_empty_shelf_list_at_startup(client):
     response = client.get("/shelfs")

@@ -28,7 +28,7 @@ services:
     ports:
       - "${APP_PORT}:${APP_PORT}"
     volumes:
-      - ./src/backend:/sandwichotek/src/backend
+      - ./backend:/sandwichotek/backend
     env_file:
       - .env
     depends_on:
@@ -68,7 +68,7 @@ services:
     ports:
       - "${TEST_APP_PORT}:${TEST_APP_PORT}"
     volumes:
-      - ./src/backend:/sandwichotek/src/backend
+      - ./backend:/sandwichotek/backend
       - ./tests:/sandwichotek/tests
     env_file:
       - .env
