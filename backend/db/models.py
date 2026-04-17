@@ -139,9 +139,8 @@ class RecipeItemUpdate(SQLModel):
 class MealProductionBase(SQLModel):
     date: date
     quantity: int
-    cost_per_meal: float | None = Field(default=None)
 
-class MealProduction(SQLModel, table=True):
+class MealProduction(MealProductionBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
     meal_id: int = Field(foreign_key="meal.id", ondelete="RESTRICT")
