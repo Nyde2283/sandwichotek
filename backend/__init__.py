@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from .db import init_db
 from .db.models import *
-from .routers import misc, shelfs
+from .routers import misc, shelfs, brands
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -23,8 +23,9 @@ app = FastAPI(
     swagger_ui_parameters={"operationsSorter": "method"}
 )
 
-app.include_router(shelfs.router)
 app.include_router(misc.router)
+app.include_router(shelfs.router)
+app.include_router(brands.router)
 
 def run_server():
     if APP_HOST is not None and APP_PORT is not None:
