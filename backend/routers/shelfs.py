@@ -17,7 +17,7 @@ def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
         return db_shelf
 
 @router.get("/",  response_model=list[ShelfPublic])
-def get_all_ingredients(session: Session = Depends(get_session)):
+def get_all_shelfs(session: Session = Depends(get_session)):
     return session.exec(select(Shelf)).all()
 
 @router.get("/{shelf_id}",  response_model=ShelfPublic)
@@ -44,7 +44,7 @@ def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(g
 def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
-        return HTTPException(status_code=404, detail="Shelf not found")
+        raise HTTPException(status_code=404, detail="Shelf not found")
     session.delete(shelf)
     session.commit()
     return "ok"
