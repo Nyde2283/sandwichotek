@@ -1,5 +1,3 @@
-import pytest
-from typing import Any
 from backend.db.models import Shelf
 
 # ---------------------------------------------------------------------------- #
