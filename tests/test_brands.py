@@ -91,7 +91,8 @@ def test_delete_brand_by_id_conflict_foreign_key(client, session, seeded_db):
     response = client.delete("/brands/2")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert response.json()["detail"]["msg"] == "Foreign key violation ! Check ingredients field"
+    assert response.json()["detail"]["msg"] == "Foreign key violation ! Check 'blocking ingredients' field"
+    assert response.json()["detail"]["blocking ingredients"] != []
     assert response.json()["detail"].get("original error") != None
     assert session.get(Brand, 2) != None
 

@@ -55,8 +55,9 @@ def delete_meal(meal_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check recipe_items and meal_productions fields",
-                "object": jsonable_encoder(MealPublicVerbose.model_validate(meal)),
+                "msg": "Foreign key violation ! Check 'blocking recipe_items' and 'blocking meal_productions' fields",
+                "blocking recipe_items": jsonable_encoder(meal.recipe_items),
+                "blocking meal_productions": jsonable_encoder(meal.meal_productions),
                 "original error": str(error.orig)
             }
         )

@@ -55,8 +55,8 @@ def delete_brand(brand_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check ingredients field",
-                "object": jsonable_encoder(BrandPublicVerbose.model_validate(brand)),
+                "msg": "Foreign key violation ! Check 'blocking ingredients' field",
+                "blocking ingredients": jsonable_encoder(brand.ingredients),
                 "original error": str(error.orig)
             }
         )

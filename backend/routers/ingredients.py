@@ -55,8 +55,8 @@ def delete_ingredient(ingredient_id: int, session: Session = Depends(get_session
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check recipe_items field",
-                "object": jsonable_encoder(IngredientPublicVerbose.model_validate(ingredient)),
+                "msg": "Foreign key violation ! Check 'blocking recipe_items' field",
+                "blocking recipe_items": jsonable_encoder(ingredient.recipe_items),
                 "original error": str(error.orig)
             }
         )

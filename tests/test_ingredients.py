@@ -133,7 +133,8 @@ def test_delete_ingredient_by_id_conflict_foreign_key(client, session, seeded_db
     response = client.delete("/ingredients/1")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert response.json()["detail"]["msg"] == "Foreign key violation ! Check recipe_items field"
+    assert response.json()["detail"]["msg"] == "Foreign key violation ! Check 'blocking recipe_items' field"
+    assert response.json()["detail"]["blocking recipe_items"] != []
     assert response.json()["detail"].get("original error") != None
     assert session.get(Ingredient, 3) != None
 
