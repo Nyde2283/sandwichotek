@@ -106,7 +106,7 @@ def test_delete_meal_by_id_conflict_foreign_key(client, session, seeded_db):
     assert response.json()["detail"]["msg"] == "Foreign key violation ! Check 'blocking recipe_items' and 'blocking meal_productions' fields"
     assert response.json()["detail"]["blocking recipe_items"] != []
     assert response.json()["detail"]["blocking meal_productions"] != []
-    assert response.json()["detail"].get("original error") != None
+    assert response.json()["detail"]["original error"] != None
     assert session.get(Meal, 1) != None
 
 def test_delete_meal_by_id(client, session, seeded_db):
