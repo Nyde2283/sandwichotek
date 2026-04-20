@@ -30,6 +30,7 @@ services:
       - "${APP_PORT}:8000"
     volumes:
       - ./backend:/sandwichotek/backend
+      - ./assets:/sandwichotek/assets
     env_file:
       - .env
     depends_on:
@@ -72,6 +73,7 @@ services:
     volumes:
       - ./backend:/sandwichotek/backend
       - ./tests:/sandwichotek/tests
+      - ./assets:/sandwichotek/assets
     env_file:
       - .env
     depends_on:

@@ -7,3 +7,8 @@ def test_schema_diagram(client):
     response = client.get("/schema_diagram")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/svg+xml"
+
+def test_get_favicon(client):
+    response = client.get("/favicon.ico")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"

@@ -20,3 +20,7 @@ def get_schema_diagram():
     add_web_font_and_interactivity(filename, filename)
 
     return FileResponse(filename)
+
+@router.get("/favicon.ico", response_class=FileResponse)
+def get_favicon():
+    return FileResponse("assets/sandwich.png")
