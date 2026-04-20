@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
 
@@ -46,5 +48,15 @@ def delete_brand(brand_id: int, session: Session = Depends(get_session)):
     if not brand:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
     session.delete(brand)
-    session.commit()
-    return "ok"
+    try:
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "msg": "Foreign key violation ! Check ingredients field",
+                "object": jsonable_encoder(BrandPublicVerbose.model_validate(brand)),
+                "original error": str(error.orig)
+            }
+        )

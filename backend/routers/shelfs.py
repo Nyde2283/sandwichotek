@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
 
@@ -40,11 +42,21 @@ def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(g
     session.refresh(db_shelf)
     return db_shelf
 
-@router.delete("/{shelf_id}")
+@router.delete("/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
     session.delete(shelf)
-    session.commit()
-    return "ok"
+    try:
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "msg": "Foreign key violation ! Check ingredients field",
+                "object": jsonable_encoder(ShelfPublicVerbose.model_validate(shelf)),
+                "original error": str(error.orig)
+            }
+        )
