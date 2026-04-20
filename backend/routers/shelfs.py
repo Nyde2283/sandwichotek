@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
 from ..db.models import *
 from ..db import get_session
@@ -24,7 +24,7 @@ def get_all_shelfs(session: Session = Depends(get_session)):
 def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
     session.refresh(shelf)
     return shelf
 
@@ -32,7 +32,7 @@ def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
 def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(get_session)):
     db_shelf = session.get(Shelf, shelf_id)
     if not db_shelf:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
     shelf_data = shelf.model_dump(exclude_unset=True)
     db_shelf.sqlmodel_update(shelf_data)
     session.add(db_shelf)
@@ -44,7 +44,7 @@ def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(g
 def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
     session.delete(shelf)
     session.commit()
     return "ok"
