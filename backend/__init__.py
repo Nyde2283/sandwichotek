@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from .db import init_db
 from .db.models import *
-from .routers import misc, shelfs, brands
+from .routers import misc, shelfs, brands, meals
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -26,6 +26,7 @@ app = FastAPI(
 app.include_router(misc.router)
 app.include_router(shelfs.router)
 app.include_router(brands.router)
+app.include_router(meals.router)
 
 def run_server():
     if APP_HOST is not None and APP_PORT is not None:
