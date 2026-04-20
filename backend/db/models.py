@@ -25,6 +25,9 @@ class ShelfCreate(ShelfBase):
 class ShelfPublic(ShelfBase):
     id: int
 
+class ShelfPublicVerbose(ShelfPublic):
+    ingredients: list[IngredientPublic]
+
 class ShelfUpdate(SQLModel):
     name: str | None = None
 
@@ -44,6 +47,9 @@ class BrandCreate(BrandBase):
 
 class BrandPublic(BrandBase):
     id: int
+
+class BrandPublicVerbose(BrandPublic):
+    ingredients: list[IngredientPublic]
 
 class BrandUpdate(SQLModel):
     name: str | None = None
@@ -67,9 +73,13 @@ class MealCreate(MealBase):
 class MealPublic(MealBase):
     id: int
 
+class MealPublicVerbose(MealPublic):
+    meal_productions: list[MealProductionPublic]
+    recipe_items: list[RecipeItemPublic]
+
 class MealUpdate(SQLModel):
     name: str | None = None
-    veggy: bool
+    veggy: bool | None = None
 
 # ---------------------------------------------------------------------------- #
 
@@ -153,4 +163,9 @@ class MealProductionPublic(MealProductionBase):
     id: int
 
 class MealProductionVerbose(MealProductionPublic):
-    meal: Meal
+    meal: Meal | None
+
+class MealProductionUpdate(SQLModel):
+    meal_id: int | None = None
+    date: date | None = None
+    quantity: int | None = None
