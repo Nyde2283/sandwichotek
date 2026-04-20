@@ -8,7 +8,7 @@ def test_ping(client):
 def test_schema_diagram(client):
     response = client.get("/schema_diagram")
     assert response.status_code == status.HTTP_200_OK
-    assert response.headers["content-type"] == "image/svg+xml"
+    assert response.headers["content-type"] == "image/png"
 
 def test_get_favicon(client):
     response = client.get("/favicon.ico")
