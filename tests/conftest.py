@@ -69,7 +69,7 @@ def seeded_db(session):
                 "unit": "g",
                 "remark": "",
                 "shelf_id": 2,
-                "brand_id": 1,
+                "brand_id": 2,
             },
             {
                 "name": "comté",
