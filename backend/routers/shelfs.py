@@ -8,7 +8,7 @@ router = APIRouter(
     tags=["Shelfs"]
 )
 
-@router.post("/", response_model=Shelf)
+@router.post("/", response_model=ShelfPublicVerbose)
 def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
         db_shelf = Shelf.model_validate(shelf)
         session.add(db_shelf)
@@ -16,11 +16,11 @@ def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
         session.refresh(db_shelf)
         return db_shelf
 
-@router.get("/",  response_model=list[ShelfPublic])
+@router.get("/",  response_model=list[ShelfPublicVerbose])
 def get_all_shelfs(session: Session = Depends(get_session)):
     return session.exec(select(Shelf)).all()
 
-@router.get("/{shelf_id}",  response_model=ShelfPublic)
+@router.get("/{shelf_id}",  response_model=ShelfPublicVerbose)
 def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
@@ -28,7 +28,7 @@ def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
     session.refresh(shelf)
     return shelf
 
-@router.put("/{shelf_id}",  response_model=ShelfPublic)
+@router.put("/{shelf_id}",  response_model=ShelfPublicVerbose)
 def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(get_session)):
     db_shelf = session.get(Shelf, shelf_id)
     if not db_shelf:

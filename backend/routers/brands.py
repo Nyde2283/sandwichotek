@@ -8,7 +8,7 @@ router = APIRouter(
     tags=["Brands"]
 )
 
-@router.post("/", response_model=Brand)
+@router.post("/", response_model=BrandPublicVerbose)
 def create_brand(brand: BrandCreate, session: Session = Depends(get_session)):
         db_brand = Brand.model_validate(brand)
         session.add(db_brand)
@@ -16,11 +16,11 @@ def create_brand(brand: BrandCreate, session: Session = Depends(get_session)):
         session.refresh(db_brand)
         return db_brand
 
-@router.get("/",  response_model=list[BrandPublic])
+@router.get("/",  response_model=list[BrandPublicVerbose])
 def get_all_brands(session: Session = Depends(get_session)):
     return session.exec(select(Brand)).all()
 
-@router.get("/{brand_id}",  response_model=BrandPublic)
+@router.get("/{brand_id}",  response_model=BrandPublicVerbose)
 def get_brand_by_id(brand_id: int, session: Session = Depends(get_session)):
     brand = session.get(Brand, brand_id)
     if not brand:
@@ -28,7 +28,7 @@ def get_brand_by_id(brand_id: int, session: Session = Depends(get_session)):
     session.refresh(brand)
     return brand
 
-@router.put("/{brand_id}",  response_model=BrandPublic)
+@router.put("/{brand_id}",  response_model=BrandPublicVerbose)
 def update_brand(brand_id: int, brand: BrandUpdate, session: Session = Depends(get_session)):
     db_brand = session.get(Brand, brand_id)
     if not db_brand:
