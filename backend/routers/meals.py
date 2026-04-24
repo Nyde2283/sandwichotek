@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
+from . import recipes
 
 router = APIRouter(
     prefix="/meals",
