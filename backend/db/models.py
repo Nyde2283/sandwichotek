@@ -119,8 +119,8 @@ class IngredientUpdate(SQLModel):
 # ---------------------------------------------------------------------------- #
 
 class RecipeItemBase(SQLModel):
-    meal_id: int = Field(default=None, primary_key=True, foreign_key="meal.id", ondelete="RESTRICT")
-    ingredient_id: int = Field(default=None, primary_key=True, foreign_key="ingredient.id", ondelete="RESTRICT")
+    meal_id: int = Field(primary_key=True, foreign_key="meal.id", ondelete="RESTRICT")
+    ingredient_id: int = Field(primary_key=True, foreign_key="ingredient.id", ondelete="RESTRICT")
     quantity: float
 
 class RecipeItem(RecipeItemBase, table=True):
@@ -142,6 +142,23 @@ class RecipeItemUpdate(SQLModel):
     meal_id: int | None = None
     ingredient_id: int | None = None
     quantity: int | None = None
+
+# ---------------------------------------------------------------------------- #
+
+class IngredientItem(SQLModel):
+    ingredient: IngredientPublic
+    quantity: float
+
+class Recipe(SQLModel):
+    meal_id: int
+    items: list[IngredientItem]
+
+class IngredientItemUpdate(SQLModel):
+    ingredient_id: int
+    quantity: float
+
+class RecipeDeleteItems(SQLModel):
+    ingredients_id: list[int]
 
 # ---------------------------------------------------------------------------- #
 
