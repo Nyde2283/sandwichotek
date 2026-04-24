@@ -45,6 +45,7 @@ def test_get_shelf_list(client, seeded_db):
 def test_get_shelf_by_id_on_empty_db(client):
     response = client.get("/shelfs/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Shelf not found"}
 
 def test_get_shelf_by_id(client, seeded_db):
     for i, shelf in enumerate(seeded_db[Shelf]):
@@ -64,6 +65,7 @@ def test_update_shelf_by_id_on_empty_db(client):
     response = client.put("/shelfs/1", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Shelf not found"}
 
 def test_update_shelf_by_id(client, session, seeded_db):
     body = {"name": "fr0m@g3"}
@@ -86,6 +88,7 @@ def test_delete_shelf_by_id_on_empty_db(client, session):
     assert session.get(Shelf, 1) == None
     response = client.delete("/shelfs/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Shelf not found"}
 
 def test_delete_shelf_by_id_conflict_foreign_key(client, session, seeded_db):
     response = client.delete("/shelfs/3")

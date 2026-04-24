@@ -45,6 +45,7 @@ def test_get_brand_list(client, session, seeded_db):
 def test_get_brand_by_id_on_empty_db(client):
     response = client.get("/brands/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Brand not found"}
 
 def test_get_brand_by_id(client, seeded_db):
     for i, brand in enumerate(seeded_db[Brand]):
@@ -64,6 +65,7 @@ def test_update_brand_by_id_on_empty_db(client):
     response = client.put("/brands/1", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Brand not found"}
 
 def test_update_brand_by_id(client, session, seeded_db):
     body = {"name": "p0uc3"}
@@ -86,6 +88,7 @@ def test_delete_brand_by_id_on_empty_db(client, session):
     assert session.get(Brand, 1) == None
     response = client.delete("/brands/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Brand not found"}
 
 def test_delete_brand_by_id_conflict_foreign_key(client, session, seeded_db):
     response = client.delete("/brands/2")

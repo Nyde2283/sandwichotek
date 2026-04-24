@@ -50,6 +50,7 @@ def test_get_meal_list(client, seeded_db):
 def test_get_meal_by_id_on_empty_db(client):
     response = client.get("/meals/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Meal not found"}
 
 def test_get_meal_by_id(client, seeded_db):
     for i, meal in enumerate(seeded_db[Meal]):
@@ -72,6 +73,7 @@ def test_update_meal_by_id_on_empty_db(client):
     response = client.put("/meals/2", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Meal not found"}
 
 def test_update_meal_by_id(client, session, seeded_db):
     body = {
@@ -98,6 +100,7 @@ def test_delete_meal_by_id_on_empty_db(client, session):
     assert session.get(Meal, 1) == None
     response = client.delete("/meals/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Meal not found"}
 
 def test_delete_meal_by_id_conflict_foreign_key(client, session, seeded_db):
     response = client.delete("/meals/1")

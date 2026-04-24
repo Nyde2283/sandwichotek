@@ -69,7 +69,7 @@ def test_create_ingredient_with_optionals(client, session, seeded_db):
 #                                      GET                                     #
 # ---------------------------------------------------------------------------- #
 
-def test_empty_ingredient_list_at_startup(client):
+def test_get_ingredient_list_on_empty_db(client):
     response = client.get("/ingredients")
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
@@ -87,6 +87,7 @@ def test_get_ingredient_list(client, seeded_db):
 def test_get_ingredient_by_id_on_empty_db(client):
     response = client.get("/ingredients/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Ingredient not found"}
 
 def test_get_ingredient_by_id(client, seeded_db):
     for i, ingredient in enumerate(seeded_db[Ingredient]):
@@ -106,6 +107,7 @@ def test_update_ingredient_by_id_on_empty_db(client):
     response = client.put("/ingredients/1", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Ingredient not found"}
 
 def test_udpate_ingredient_by_id(client, session, seeded_db):
     body = {"name": "t0m@t3"}
@@ -128,6 +130,7 @@ def test_delete_ingredient_by_id_on_empty_db(client, session):
     assert session.get(Ingredient, 1) == None
     response = client.delete("/ingredients/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Ingredient not found"}
 
 def test_delete_ingredient_by_id_conflict_foreign_key(client, session, seeded_db):
     response = client.delete("/ingredients/1")
