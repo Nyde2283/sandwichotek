@@ -26,7 +26,7 @@ def get_all_ingredients(session: Session = Depends(get_session)):
 def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_session)):
     ingredient = session.get(Ingredient, ingredient_id)
     if not ingredient:
-        raise HTTPException(status_code=404, detail="Ingredient not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingredient not found")
     session.refresh(ingredient)
     return ingredient
 
@@ -34,7 +34,7 @@ def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_sess
 def update_ingredient(ingredient_id: int, ingredient: IngredientUpdate, session: Session = Depends(get_session)):
     db_ingredient = session.get(Ingredient, ingredient_id)
     if not db_ingredient:
-        raise HTTPException(status_code=404, detail="Ingrdient not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingredient not found")
     ingredient_data = ingredient.model_dump(exclude_unset=True)
     db_ingredient.sqlmodel_update(ingredient_data)
     session.add(db_ingredient)
@@ -46,7 +46,7 @@ def update_ingredient(ingredient_id: int, ingredient: IngredientUpdate, session:
 def delete_ingredient(ingredient_id: int, session: Session = Depends(get_session)):
     ingredient = session.get(Ingredient, ingredient_id)
     if not ingredient:
-        raise HTTPException(status_code=404, detail="Ingredient not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingredient not found")
     session.delete(ingredient)
     try:
         session.commit()
