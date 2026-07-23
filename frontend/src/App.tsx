@@ -229,11 +229,14 @@ const ClickToEdit = ({ initialValue, onSave }: { initialValue: string, onSave: (
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus automatique quand on passe en mode édition
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select(); // Optionnel : sélectionne tout le texte d'un coup
+      inputRef.current.select(); // Sélectionne tout le texte d'un coup
     }
   }, [isEditing]);
 
@@ -648,25 +651,159 @@ const ShoppingListTable = () => {
 };
 
 const RecipeCreatorView = () => {
-  const [ingredients, setIngredients] = useState<RecipeIngredient[]>([
-    { id: '1', productId: '1', quantity: 0.2, unit: 'unité' },
-    { id: '2', productId: '2', quantity: 10, unit: 'g' },
-    { id: '3', productId: '3', quantity: 10, unit: 'g' },
-    { id: '4', productId: '4', quantity: 2, unit: 'unité' },
-  ]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [selectedMeal, setSelectedMeal] = useState<Meal>();
 
-  const addIngredient = () => {
-    //TODO valeur par défaut
-    setIngredients([...ingredients, { id: Date.now().toString(), productId: '', quantity: 0, unit: 'units' }]);
+  // Charge la liste des recettes depuis l'API
+  const loadRecipes = async () => {
+    try {
+      const res = await sendAPIGET('recipes/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch recipes: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.warn('Unexpected recipes response:', json);
+        return;
+      }
+
+      const mapped: Recipe[] = json.map((it: any) => ({
+        meal_id: it.meal_id ?? 0,
+        items: Array.isArray(it.items)
+          ? it.items.map((item: any) => ({
+              quantity: item.quantity ?? 0,
+              ingredient: {
+                id: item.ingredient?.id ?? 0,
+                name: item.ingredient?.name ?? '',
+                unit: item.ingredient?.unit ?? '',
+                note: item.ingredient?.remark ?? '',
+                brand: item.ingredient?.brand_id ?? 0,
+                shelf: item.ingredient?.shelf_id ?? 0,
+              },
+            }))
+          : [],
+      }));
+
+      setRecipes(mapped);
+
+      // Met à jour l'ID sélectionné par défaut une fois les recettes chargées
+      if (mapped.length > 0 && mapped[0].meal_id) {
+        setSelectedMeal(meals.find((m) => m.id == mapped[0].meal_id));
+      }
+    } catch (err) {
+      console.error('Error loading recipes', err);
+    }
   };
 
-  const removeIngredient = (id: string) => {
-    setIngredients(ingredients.filter(ing => ing.id !== id));
+  // Charge la liste des repas depuis l'API
+  const loadMeals = async () => {
+    try {
+      const res = await sendAPIGET('meals/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch meals: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
+
+      const mapped: Meal[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        veggy: Boolean(it.veggy),
+        meal_productions: Array.isArray(it.meal_productions) ? it.meal_productions : [],
+        recipe_items: [],
+      }));
+
+      setMeals(mapped);
+    } catch (err) {
+      console.error('Error loading meals', err);
+    }
   };
 
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
+  useEffect(() => {
+    loadRecipes();
+    loadMeals();
+  }, []);
 
-  const meals = ["Alpin", "Montagnard"]
+  // Dérivation directe de la recette active
+  const selectedRecipe = recipes.find((r) => r.meal_id === selectedMeal?.id);
+
+  // Sauvegarde d'un ingrédient de la recette
+  const saveRecipeItem = async (item: RecipeItem) => {
+    try {
+      const payload = {
+        name: item.ingredient.name,
+        unit: item.ingredient.unit,
+        remark: item.ingredient.note,
+        shelf_id: item.ingredient.shelf,
+        brand_id: item.ingredient.brand,
+      };
+
+      const res = await sendAPIPOST('ingredients/', payload);
+      if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      console.error('Error saving ingredient', err);
+    }
+  };
+
+  // Suppression locale d'un ingrédient
+  const removeRecipeItem = (ingredientId: number) => {
+    if (!selectedRecipe) return;
+
+    setRecipes((prevRecipes) =>
+      prevRecipes.map((r) => {
+        if (r.meal_id !== selectedMeal?.id) return r;
+        return {
+          ...r,
+          items: r.items.filter((item) => item.ingredient.id !== ingredientId),
+        };
+      })
+    );
+  };
+
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+
+  const loadIngredients = async () => {
+    try {
+      const res = await sendAPIGET('ingredients/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch ingredients: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.warn('Unexpected ingredients response:', json);
+        return;
+      }
+
+      const mapped: Ingredient[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        brand: it.brand?.id ?? 0,
+        shelf: it.brand?.id ?? 0,
+        unit: it.unit ?? 'unité',
+        note: it.note ?? '',
+      }));
+
+      console.log(mapped);
+
+      setIngredients(mapped);
+    } catch (err) {
+      console.error('Error loading ingredients', err);
+    }
+  };
+
+  useEffect(() => {
+    loadIngredients();
+    loadRecipes();
+    loadMeals();
+  }, []);
 
   return (
     <motion.div
@@ -685,18 +822,31 @@ const RecipeCreatorView = () => {
         <section className="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
           <div className="py-2">
             <div className="relative w-full">
-              <select className="w-full p-2 appearance-none bg-surface-container-high/50 rounded-lg text-sm focus:ring-2 focus:ring-primary-light/50 cursor-pointer">
-                <option>Nouveau produit</option>
-                {meals.map((meal) => (
-                  <option>{meal}</option>
-                ))}
-              </select>
+              <select
+            value={selectedMeal?.id}
+            onChange={(e) => setSelectedMeal(meals.find((m) => m.id == Number(e.target.value)))}
+            className="w-full appearance-none bg-surface-container-low rounded-lg border-none p-2 px-10 text-center [text-align-last:center] text-4xl font-medium tracking-tight text-on-surface cursor-pointer outline-none focus:ring-0"
+          >
+            <option>Nouvelle recette</option>
+            {recipes.map((recipe) => {
+              const meal = meals.find((m) => m.id === recipe.meal_id);
+              return (
+                <option
+                  key={recipe.meal_id}
+                  value={recipe.meal_id}
+                  className="text-base font-normal text-left"
+                >
+                  {meal ? meal.name : `Recette #${recipe.meal_id}`}
+                </option>
+              );
+            })}
+          </select>
               <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
             </div>
           </div>
           <div className="flex items-center justify-between py-2 gap-4">
             <ClickToEdit
-              initialValue="Nom du plat"
+              initialValue= {selectedMeal?.name ?? "Nom de la recette"}
               onSave={(newValue) => {
                 console.log("Nouveau nom :", newValue);
               }}
@@ -706,7 +856,14 @@ const RecipeCreatorView = () => {
               <span className="text-sm font-medium text-on-surface-variant group-hover:text-primary transition-colors">
                 Veggie
               </span>
-              <input type="checkbox" className="sr-only peer" />
+              <input 
+                type="checkbox" 
+                checked={meals.find((m) => m.id === selectedMeal?.id)?.veggy ?? false}
+                onChange={(e) => {
+                  //TODO
+                }}
+                className="sr-only peer"
+              />
               <div className="relative w-11 h-6 rounded-full peer 
                   bg-surface-container-high 
                   transition-colors duration-500 ease-in-out
@@ -728,9 +885,14 @@ const RecipeCreatorView = () => {
 
           <div className="space-y-4">
             <AnimatePresence initial={false}>
-              {ingredients.map((ingredient) => (
+              {!selectedRecipe || selectedRecipe.items.length === 0 ? (
+              <p className="text-center text-on-surface-variant py-8">
+                Aucun ingrédient associé à ce plat.
+              </p>
+              ) : (
+              selectedRecipe.items.map((item) => (
                 <motion.div
-                  key={ingredient.id}
+                  key={item.ingredient.id}
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -740,13 +902,13 @@ const RecipeCreatorView = () => {
                     <label className="block mb-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ingrédient</label>
                     <div className="relative">
                       <select
-                        value={ingredient.productId}
+                        value={item.ingredient.id}
                         // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
                         className="w-full px-4 py-3 rounded-lg appearance-none bg-white text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer"
                       >
-                        {products.map((product) => (
-                          <option key={product.id} value={product.id}>
-                            {product.name}
+                        {ingredients.map((ingredient) => (
+                          <option key={ingredient.id} value={ingredient.id}>
+                            {ingredient.name}
                           </option>
                         ))}
                       </select>
@@ -759,28 +921,28 @@ const RecipeCreatorView = () => {
                       <input
                         className="tabular-nums w-full px-4 py-3 pr-16 bg-white rounded-lg text-sm focus:ring-2 focus:ring-primary-light/50"
                         type="number"
-                        defaultValue={ingredient.quantity}
+                        defaultValue={item.quantity}
                       />
-                      <span className="absolute right-4 text-xs font-medium text-on-surface-variant">{ingredient.unit}</span>
+                      <span className="absolute right-4 text-xs font-medium text-on-surface-variant">{item.ingredient.unit}</span>
                     </div>
                   </div>
                   <div className="col-span-1 flex justify-center">
                     <button
-                      onClick={() => removeIngredient(ingredient.id)}
+                      //TODO onClick={() => removeRecipeItem(item.ingredient.id)}
                       className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
                     >
                       <Trash2 size={20} />
                     </button>
                   </div>
                 </motion.div>
-              ))}
+              )))}
             </AnimatePresence>
           </div>
 
           
           <div className="flex justify-between items-center pt-4">
             <button
-              onClick={addIngredient}
+              //TODO onClick={addRecipeItem}
               className="flex items-center gap-2 text-primary font-semibold text-sm hover:opacity-80"
             >
               <PlusCircle size={16} />
