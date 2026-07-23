@@ -36,12 +36,13 @@ import {
   AppleIcon,
   Eye,
   Plus,
-  Scroll
+  Scroll,
+  Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // --- Types ---
-
+const BASE_URL = 'http://localhost:8000'
 const APP_NAME = "Sandwichotek"
 const SHOPPING_LIST_NAME = "Liste de courses"
 const RECIPES_NAME = "Recettes"
@@ -84,6 +85,50 @@ interface Article {
   brand: string;
   quantity: number;
   unit: string;
+}
+
+interface Ingredient {
+  id: number;
+  name: string;
+  note: string;
+  brand: number;
+  shelf: number;
+  unit: string;
+}
+
+interface Brand {
+  id: number;
+  name: string;
+}
+
+interface Shelf {
+  id: number,
+  name: string
+}
+
+interface RecipeItem {
+  ingredient: Ingredient,
+  quantity: number,
+}
+
+interface Recipe {
+  meal_id: number,
+  items: RecipeItem[],
+}
+
+interface MealProduction {
+  id: number,
+  meal_id: number,
+  date: string,
+  quantity: number,
+}
+
+interface Meal {
+  id: number,
+  name: string,
+  veggy: boolean,
+  meal_productions: MealProduction[],
+  recipe_items: RecipeItem[],
 }
 
 interface ShoppingListItem {
@@ -143,6 +188,41 @@ const SHOPPING_DATA: ShoppingList[] = [
     ]
   }
 ]
+
+async function sendAPIPOST(route: String, payload: {}): Promise<Response> {
+  const res = await fetch(`${BASE_URL}/${route}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  return res
+}
+
+async function sendAPIGET(route: String): Promise<Response> {
+  const res = await fetch(`${BASE_URL}/${route}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+  return res
+}
+
+async function sendAPIPUT(route: String, payload: {}): Promise<Response> {
+  const res = await fetch(`${BASE_URL}/${route}`, {
+      method: 'PUT',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  return res
+}
 
 const ClickToEdit = ({ initialValue, onSave }: { initialValue: string, onSave: (val: string) => void }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -717,17 +797,117 @@ const RecipeCreatorView = () => {
 };
 
 const ProductsView = () => {
+  const [ingredients, setIngredients] = useState<Ingredient[]>([
+    // { id: '1', name: 'Tomate', productId: '1', brand: 'Pouce', quantity: 0.2, unit: 'unité' },
+    // { id: '2', name: 'Salade', productId: '2', brand: 'Auchan rouge', quantity: 10, unit: 'g' },
+    // { id: '3', name: 'Emmental rapé', productId: '2', brand: 'Pouce', quantity: 10, unit: 'g' },
+    // { id: '4', name: 'Saucisse', productId: '3', brand: 'Pouce', quantity: 6, unit: 'unité' },
+  ]);
 
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
-  const addProduct = () => {
+  const addIngredient = () => {
     //TODO valeur par défaut
-    setProducts([...products, { id: Date.now().toString(), name: '' }]);
+    setIngredients([...ingredients, { id: 0, name: '', brand: 0, shelf: 0, unit: 'unité', note: '' }]);
   };
 
-  const removeProduct = (id: string) => {
-    setProducts(products.filter(ing => ing.id !== id));
+  const removeIngredient = (id: number) => {
+    setIngredients(ingredients.filter(ing => ing.id !== id));
   };
 
+  const loadIngredients = async () => {
+    try {
+      const res = await sendAPIGET('ingredients/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch ingredients: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.warn('Unexpected ingredients response:', json);
+        return;
+      }
+
+      const mapped: Ingredient[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        brand: it.brand?.id ?? 0,
+        shelf: it.brand?.id ?? 0,
+        unit: it.unit ?? 'unité',
+        note: it.note ?? '',
+      }));
+
+      console.log(mapped);
+
+      setIngredients(mapped);
+    } catch (err) {
+      console.error('Error loading ingredients', err);
+    }
+  };
+
+  const [brands, setBrands] = useState<Brand[]>([]);
+
+  const loadBrands = async () => {
+    try {
+      const res = await sendAPIGET('brands/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch brands: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.warn('Unexpected brands response:', json);
+        return;
+      }
+
+      const mapped: Brand[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        brand: it.brand ?? 0,
+        shelf: it.shelf ?? 0,
+        note: it.note ?? '',
+      }));
+
+      setBrands(mapped);
+    } catch (err) {
+      console.error('Error loading brands', err);
+    }
+  };
+
+  const [shelfs, setShelfs] = useState<Shelf[]>([]);
+
+  const loadShelfs = async () => {
+    try {
+      const res = await sendAPIGET('shelfs/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch shelfs: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.warn('Unexpected shelfs response:', json);
+        return;
+      }
+
+      const mapped: Shelf[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+      }));
+
+      console.log(mapped);
+
+      setShelfs(mapped);
+    } catch (err) {
+      console.error('Error loading shelfs', err);
+    }
+  };
+
+  useEffect(() => {
+    loadIngredients();
+    loadBrands();
+    loadShelfs();
+  }, []);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -755,29 +935,85 @@ const ProductsView = () => {
 
         <div className="flex-col space-y-4">
           <AnimatePresence initial={false}>
-            {products.map((product) => (
+            {ingredients.map((ingredient: Ingredient) => (
               <motion.div
-                key={product.id}
+                key={ingredient.id}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="grid grid-cols-3 gap-2 p-3 items-end bg-surface-container-low/50 rounded-lg overflow-hidden"
+                className="grid grid-cols-1 md:grid-cols-5 gap-3 p-3 items-center bg-surface-container-low/50 rounded-lg overflow-hidden"
               >
-                <div className="col-span-2">
-                  <label className="block px-3 mt-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ingrédient</label>
-                  <div className="flex-1 min-w-0">
-                    <ClickToEdit
-                      initialValue={product.name}
-                      onSave={(newValue) => {
-                        console.log("Nouveau nom :", newValue);
-                      }}
-                    />
+                <div className="w-full">
+                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Ingrédient
+                  </label>
+                  <ClickToEdit
+                    initialValue={ingredient.name}
+                    onSave={(newValue) => {
+                      console.log("Nouveau nom :", newValue);
+                    }}
+                  />
+                </div>
+
+                <div className="w-full">
+                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Unité
+                  </label>
+                  <ClickToEdit
+                    initialValue={ingredient.unit}
+                    onSave={(newValue) => {
+                      console.log("Nouvelle unité :", newValue);
+                    }}
+                  />
+                </div>
+
+                <div className="w-full">
+                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Marque
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={ingredient.brand}
+                      // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
+                      className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
+                    >
+                      <option value="" disabled>Aucune marque</option>
+                      {brands.map((brand) => (
+                        <option key={brand.id} value={brand.id}>
+                          {brand.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
                   </div>
                 </div>
-                <div className="col-span-1 flex justify-end">
+
+                <div className="w-full">
+                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Rayon
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={ingredient.shelf}
+                      // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
+                      className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
+                    >
+                      <option value="" disabled>Aucun rayon</option>
+                      {shelfs.map((shelf) => (
+                        <option key={shelf.id} value={shelf.id}>
+                          {shelf.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="flex justify-start md:justify-end items-center">
                   <button
-                    onClick={() => removeProduct(product.id)}
-                    className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
+                    onClick={() => removeIngredient(ingredient.id)}
+                    className="p-2 text-tertiary/40 hover:text-tertiary transition-colors rounded-md"
+                    title="Supprimer"
                   >
                     <Trash2 size={20} />
                   </button>
@@ -789,7 +1025,7 @@ const ProductsView = () => {
 
         <div className="flex justify-between items-center pt-2">
           <button
-            onClick={addProduct}
+            onClick={addIngredient}
             className="flex items-center gap-2 text-primary font-semibold text-sm hover:opacity-80"
           >
             <PlusCircle size={16} />
@@ -805,23 +1041,121 @@ const ProductsView = () => {
 };
 
 const ArticlesView = () => {
-  const [articles, setArticles] = useState<Article[]>([
-    { id: '1', name: 'Tomate', productId: '1', brand: 'Pouce', quantity: 0.2, unit: 'unité' },
-    { id: '2', name: 'Salade', productId: '2', brand: 'Auchan rouge', quantity: 10, unit: 'g' },
-    { id: '3', name: 'Emmental rapé', productId: '2', brand: 'Pouce', quantity: 10, unit: 'g' },
-    { id: '4', name: 'Saucisse', productId: '3', brand: 'Pouce', quantity: 6, unit: 'unité' },
-  ]);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [selectedMealId, setSelectedMealId] = useState<number>(0);
 
-  const addArticle = () => {
-    //TODO valeur par défaut
-    setArticles([...articles, { id: Date.now().toString(), name: '', productId: '', brand: '', quantity: 0, unit: 'units' }]);
+  // Charge la liste des recettes depuis l'API
+  const loadRecipes = async () => {
+    try {
+      const res = await sendAPIGET('recipes/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch recipes: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.warn('Unexpected recipes response:', json);
+        return;
+      }
+
+      const mapped: Recipe[] = json.map((it: any) => ({
+        meal_id: it.meal_id ?? 0,
+        items: Array.isArray(it.items)
+          ? it.items.map((item: any) => ({
+              quantity: item.quantity ?? 0,
+              ingredient: {
+                id: item.ingredient?.id ?? 0,
+                name: item.ingredient?.name ?? '',
+                unit: item.ingredient?.unit ?? '',
+                note: item.ingredient?.remark ?? '',
+                brand: item.ingredient?.brand_id ?? 0,
+                shelf: item.ingredient?.shelf_id ?? 0,
+              },
+            }))
+          : [],
+      }));
+
+      setRecipes(mapped);
+
+      // Met à jour l'ID sélectionné par défaut une fois les recettes chargées
+      if (mapped.length > 0 && mapped[0].meal_id) {
+        setSelectedMealId(mapped[0].meal_id);
+      }
+    } catch (err) {
+      console.error('Error loading recipes', err);
+    }
   };
 
-  const removeArticle = (id: string) => {
-    setArticles(articles.filter(ing => ing.id !== id));
+  // Charge la liste des repas depuis l'API
+  const loadMeals = async () => {
+    try {
+      const res = await sendAPIGET('meals/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch meals: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
+
+      const mapped: Meal[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        veggy: Boolean(it.veggy),
+        meal_productions: Array.isArray(it.meal_productions) ? it.meal_productions : [],
+        recipe_items: [],
+      }));
+
+      setMeals(mapped);
+    } catch (err) {
+      console.error('Error loading meals', err);
+    }
   };
 
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
+  useEffect(() => {
+    loadRecipes();
+    loadMeals();
+  }, []);
+
+  // Dérivation directe de la recette active
+  const selectedRecipe = recipes.find((r) => r.meal_id === selectedMealId);
+
+  // Sauvegarde d'un ingrédient de la recette
+  const saveRecipeItem = async (item: RecipeItem) => {
+    try {
+      const payload = {
+        name: item.ingredient.name,
+        unit: item.ingredient.unit,
+        remark: item.ingredient.note,
+        shelf_id: item.ingredient.shelf,
+        brand_id: item.ingredient.brand,
+      };
+
+      const res = await sendAPIPOST('ingredients/', payload);
+      if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      console.error('Error saving ingredient', err);
+    }
+  };
+
+  // Suppression locale d'un ingrédient
+  const removeRecipeItem = (ingredientId: number) => {
+    if (!selectedRecipe) return;
+
+    setRecipes((prevRecipes) =>
+      prevRecipes.map((r) => {
+        if (r.meal_id !== selectedMealId) return r;
+        return {
+          ...r,
+          items: r.items.filter((item) => item.ingredient.id !== ingredientId),
+        };
+      })
+    );
+  };
 
   return (
     <motion.div
@@ -830,109 +1164,144 @@ const ArticlesView = () => {
       exit={{ opacity: 0, y: -20 }}
       className="max-w-6xl mx-auto w-full"
     >
-
       <header className="mb-12">
         <h2 className="text-4xl font-medium tracking-tight mb-2">{ARTICLES_NAMES}</h2>
       </header>
 
-
-
       <div className="p-4 bg-surface-container-lowest rounded-xl shadow-sm h-full flex flex-col gap-4">
-        <div className="relative w-full group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant size-4" />
-          <input
-            className="w-full pl-10 pr-4 py-2 bg-surface-container rounded-full border-none focus:ring-2 focus:ring-primary-light/50 text-sm placeholder:text-on-surface-variant/60 outline-none transition-all"
-            placeholder="Chercher un produit"
-            type="text"
-          // TODO Dynamiser
+        {/* Select du Meal / Recette */}
+        <div className="relative inline-block w-full">
+          <select
+            value={selectedMealId}
+            onChange={(e) => setSelectedMealId(Number(e.target.value))}
+            className="w-full appearance-none bg-surface-container-low rounded-lg border-none p-2 px-10 text-center [text-align-last:center] text-4xl font-medium tracking-tight text-on-surface cursor-pointer outline-none focus:ring-0"
+          >
+            {recipes.map((recipe) => {
+              const meal = meals.find((m) => m.id === recipe.meal_id);
+              return (
+                <option
+                  key={recipe.meal_id}
+                  value={recipe.meal_id}
+                  className="text-base font-normal text-left"
+                >
+                  {meal ? meal.name : `Recette #${recipe.meal_id}`}
+                </option>
+              );
+            })}
+          </select>
+
+          <ChevronDown
+            size={28}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
           />
         </div>
 
+        {/* Liste dynamique des RecipeItems */}
         <div className="flex-1 space-y-4">
           <AnimatePresence initial={false}>
-            {articles.map((article) => (
-              <motion.div
-                key={article.id}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="grid grid-cols-12 gap-4 items-end bg-surface-container-low/50 p-4 rounded-lg group overflow-hidden"
-              >
-                <div className="col-span-4">
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Nom de l'article</label>
-                  <div className="flex-1 min-w-0">
-                    <ClickToEdit
-                      initialValue={article.name}
-                      onSave={(newValue) => {
-                        console.log("Nouveau nom :", newValue);
-                      }}
-                    />
+            {!selectedRecipe || selectedRecipe.items.length === 0 ? (
+              <p className="text-center text-on-surface-variant py-8">
+                Aucun ingrédient associé à ce plat.
+              </p>
+            ) : (
+              selectedRecipe.items.map((item) => (
+                <motion.div
+                  key={item.ingredient.id}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="grid grid-cols-12 gap-4 items-end bg-surface-container-low/50 p-4 rounded-lg group overflow-hidden"
+                >
+                  {/* Nom de l'ingrédient */}
+                  <div className="col-span-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                      Ingrédient
+                    </label>
+                    <div className="flex-1 min-w-0">
+                      <ClickToEdit
+                        initialValue={item.ingredient.name}
+                        onSave={(newValue) => console.log('Nouveau nom :', newValue)}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="col-span-6">
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Ingrédient associé</label>
-                  <div className="relative">
-                    <select
-                      value={article.productId}
-                      // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
-                      className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
-                    >
-                      {products.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
-                  </div>
-                </div>
-                <div className="col-span-4">
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Marque</label>
-                  <div className="flex-1 min-w-0">
-                    <ClickToEdit
-                      initialValue={article.brand}
-                      onSave={(newValue) => {
-                        console.log("Nouveau nom :", newValue);
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="col-span-4">
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Quantité</label>
-                  <div className="relative flex items-center">
-                    <input
-                      className="tabular-nums w-full bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-16 outline-none"
-                      type="number"
-                      defaultValue={article.quantity}
-                    />
-                    <span className="absolute right-4 text-xs font-medium text-on-surface-variant">{article.unit}</span>
-                  </div>
-                </div>
-                <div className="col-span-2 flex justify-end">
-                  <button
-                    onClick={() => removeArticle(article.id)}
-                    className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
-                  >
-                    <Trash2 size={20} />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
 
-        {/* Footer Actions */}
-        <div className="mt-12 pt-8 border-t border-outline-variant/10 flex justify-between items-center">
-          <button
-            onClick={addArticle}
-            className="flex items-center gap-2 text-primary font-semibold text-sm hover:opacity-80 transition-all"
-          >
-            <PlusCircle size={16} />
-            Ajouter un ingrédient
-          </button>
-          <div className="flex gap-4">
-            <button className="px-10 py-3 rounded-lg font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all">Enregistrer</button>
-          </div>
+                  {/* Association Ingrédient / Produit */}
+                  <div className="col-span-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                      Produit / Marque associé
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={item.ingredient.id}
+                        onChange={(e) => console.log('Changer produit vers :', e.target.value)}
+                        className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
+                      >
+                        {products.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={14}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sauvegarde */}
+                  <div className="col-span-2 flex justify-end">
+                    <button
+                      onClick={() => saveRecipeItem(item)}
+                      className="px-2 py-2 rounded-lg font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                    >
+                      <Save size={20} />
+                    </button>
+                  </div>
+
+                  {/* Note / Remarque */}
+                  <div className="col-span-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                      Note / Remarque
+                    </label>
+                    <div className="flex-1 min-w-0">
+                      <ClickToEdit
+                        initialValue={item.ingredient.note || ''}
+                        onSave={(newValue) => console.log('Nouvelle note :', newValue)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quantité & Unité */}
+                  <div className="col-span-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                      Quantité
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        className="tabular-nums w-full bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-16 outline-none"
+                        type="number"
+                        defaultValue={item.quantity}
+                      />
+                      <span className="absolute right-4 text-xs font-medium text-on-surface-variant">
+                        {item.ingredient.unit}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Suppression */}
+                  <div className="col-span-2 flex justify-end">
+                    <button
+                      onClick={() => removeRecipeItem(item.ingredient.id)}
+                      className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </motion.div>
