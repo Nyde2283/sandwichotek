@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
+from ..tools.response_models import *
 
 router = APIRouter(
     prefix="/shelfs",
@@ -24,7 +25,7 @@ def get_all_shelfs(session: Session = Depends(get_session)):
     """Get a list of all shelfs."""
     return session.exec(select(Shelf)).all()
 
-@router.get("/{shelf_id}",  response_model=ShelfPublicVerbose)
+@router.get("/{shelf_id}",  response_model=ShelfPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
     """Get a shelf identified by its ID."""
     shelf = session.get(Shelf, shelf_id)
@@ -33,7 +34,7 @@ def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
     session.refresh(shelf)
     return shelf
 
-@router.put("/{shelf_id}",  response_model=ShelfPublicVerbose)
+@router.put("/{shelf_id}",  response_model=ShelfPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(get_session)):
     """Update a shelf identified by its ID."""
     db_shelf = session.get(Shelf, shelf_id)
@@ -46,7 +47,7 @@ def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(g
     session.refresh(db_shelf)
     return db_shelf
 
-@router.delete("/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": HTTPUnprocessableContent_Shelf}})
 def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
     """Delete a shelf identified by its ID."""
     shelf = session.get(Shelf, shelf_id)
@@ -60,8 +61,8 @@ def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check 'blocking ingredients' field",
-                "blocking ingredients": jsonable_encoder(shelf.ingredients),
-                "original error": str(error.orig)
+                "msg": "Foreign key violation ! Check 'blocking_ingredients' field",
+                "blocking_ingredients": jsonable_encoder(shelf.ingredients),
+                "original_error": str(error.orig)
             }
         )

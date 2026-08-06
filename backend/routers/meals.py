@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
+from ..tools.response_models import *
 from . import recipes
 
 router = APIRouter(
@@ -25,7 +26,7 @@ def get_all_meals(session: Session = Depends(get_session)):
     """Get a list of all meals."""
     return session.exec(select(Meal)).all()
 
-@router.get("/{meal_id}",  response_model=MealPublicVerbose)
+@router.get("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
     """Get a meal identified by its ID."""
     meal = session.get(Meal, meal_id)
@@ -34,7 +35,7 @@ def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
     session.refresh(meal)
     return meal
 
-@router.put("/{meal_id}",  response_model=MealPublicVerbose)
+@router.put("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_meal(meal_id: int, meal: MealUpdate, session: Session = Depends(get_session)):
     """Update a meal identified by its ID."""
     db_meal = session.get(Meal, meal_id)
@@ -47,7 +48,7 @@ def update_meal(meal_id: int, meal: MealUpdate, session: Session = Depends(get_s
     session.refresh(db_meal)
     return db_meal
 
-@router.delete("/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{meal_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": HTTPUnprocessableContent_Meal}})
 def delete_meal(meal_id: int, session: Session = Depends(get_session)):
     """Delete a meal identified by its ID."""
     meal = session.get(Meal, meal_id)
@@ -61,9 +62,9 @@ def delete_meal(meal_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check 'blocking recipe_items' and 'blocking meal_productions' fields",
-                "blocking recipe_items": jsonable_encoder(meal.recipe_items),
-                "blocking meal_productions": jsonable_encoder(meal.meal_productions),
-                "original error": str(error.orig)
+                "msg": "Foreign key violation ! Check 'blocking_recipe_items' and 'blocking_meal_productions' fields",
+                "blocking_recipe_items": jsonable_encoder(meal.recipe_items),
+                "blocking_meal_productions": jsonable_encoder(meal.meal_productions),
+                "original_error": str(error.orig)
             }
         )

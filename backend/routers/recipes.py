@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
+from ..tools.response_models import *
 
 router = APIRouter(
     prefix="/recipes",
@@ -26,9 +27,9 @@ def build_recipe(meal: Meal) -> Recipe:
     )
 
 @router.post("/{meal_id}/ingredients", response_model=Recipe)
-@router.put("/{meal_id}/ingredients", response_model=Recipe)
+@router.put("/{meal_id}/ingredients", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def manage_recipe(meal_id: int, recipe: list[IngredientItemUpdate], session: Session = Depends(get_session)):
-    """Add an ingredient to the recipe of a meal, or update the quantity of an ingredient already in the recipe."""
+    """Add ingredients to the recipe of a meal, or update their quantity."""
     meal = session.get(Meal, meal_id)
 
     if not meal:
@@ -62,7 +63,7 @@ def get_all_recipes(session: Session = Depends(get_session)):
 
     return [build_recipe(meal) for meal in meals if meal.recipe_items != []]
 
-@router.get("/{meal_id}", response_model=Recipe)
+@router.get("/{meal_id}", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_recipe_by_meal_id(meal_id: int, session: Session = Depends(get_session)):
     """Get a recipe identified by the ID of the meal it belongs to."""
     meal = session.get(Meal, meal_id)
@@ -72,7 +73,7 @@ def get_recipe_by_meal_id(meal_id: int, session: Session = Depends(get_session))
 
     return build_recipe(meal)
 
-@router.delete("/{meal_id}")
+@router.delete("/{meal_id}", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def delete_recipe(meal_id: int, session: Session = Depends(get_session)):
     """Delete a recipe identified by the ID of the meal it belongs to."""
     meal = session.get(Meal, meal_id)
@@ -87,7 +88,7 @@ def delete_recipe(meal_id: int, session: Session = Depends(get_session)):
     session.refresh(meal)
     return build_recipe(meal)
 
-@router.post("/{meal_id}/delete-ingredients")
+@router.post("/{meal_id}/delete-ingredients", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def delete_ingredient_from_recipe(meal_id: int, ingredients_to_delete: RecipeDeleteItems, session: Session = Depends(get_session)):
     """Delete one or several ingredients from the recipe of a meal."""
     meal = session.get(Meal, meal_id)

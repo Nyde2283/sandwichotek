@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
+from ..tools.response_models import *
 
 router = APIRouter(
     prefix="/brands",
@@ -24,7 +25,7 @@ def get_all_brands(session: Session = Depends(get_session)):
     """Get a list of all brands."""
     return session.exec(select(Brand)).all()
 
-@router.get("/{brand_id}",  response_model=BrandPublicVerbose)
+@router.get("/{brand_id}",  response_model=BrandPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_brand_by_id(brand_id: int, session: Session = Depends(get_session)):
     """Get a brand identified by its ID."""
     brand = session.get(Brand, brand_id)
@@ -33,7 +34,7 @@ def get_brand_by_id(brand_id: int, session: Session = Depends(get_session)):
     session.refresh(brand)
     return brand
 
-@router.put("/{brand_id}",  response_model=BrandPublicVerbose)
+@router.put("/{brand_id}",  response_model=BrandPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_brand(brand_id: int, brand: BrandUpdate, session: Session = Depends(get_session)):
     """Update a brand identified by its ID."""
     db_brand = session.get(Brand, brand_id)
@@ -46,7 +47,7 @@ def update_brand(brand_id: int, brand: BrandUpdate, session: Session = Depends(g
     session.refresh(db_brand)
     return db_brand
 
-@router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": HTTPUnprocessableContent_Brand}})
 def delete_brand(brand_id: int, session: Session = Depends(get_session)):
     """Delete a brand identified by its ID."""
     brand = session.get(Brand, brand_id)
@@ -60,8 +61,8 @@ def delete_brand(brand_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check 'blocking ingredients' field",
-                "blocking ingredients": jsonable_encoder(brand.ingredients),
-                "original error": str(error.orig)
+                "msg": "Foreign key violation ! Check 'blocking_ingredients' field",
+                "blocking_ingredients": jsonable_encoder(brand.ingredients),
+                "original_error": str(error.orig)
             }
         )

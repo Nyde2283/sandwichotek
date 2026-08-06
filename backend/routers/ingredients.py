@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
+from ..tools.response_models import *
 
 router = APIRouter(
     prefix="/ingredients",
@@ -24,7 +25,7 @@ def get_all_ingredients(session: Session = Depends(get_session)):
     """Get a list of all ingredients."""
     return session.exec(select(Ingredient)).all()
 
-@router.get("/{ingredient_id}",  response_model=IngredientPublicVerbose)
+@router.get("/{ingredient_id}",  response_model=IngredientPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_session)):
     """Get an ingredient identified by its ID."""
     ingredient = session.get(Ingredient, ingredient_id)
@@ -33,7 +34,7 @@ def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_sess
     session.refresh(ingredient)
     return ingredient
 
-@router.put("/{ingredient_id}",  response_model=IngredientPublicVerbose)
+@router.put("/{ingredient_id}",  response_model=IngredientPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_ingredient(ingredient_id: int, ingredient: IngredientUpdate, session: Session = Depends(get_session)):
     """Update an ingredient identified by its ID."""
     db_ingredient = session.get(Ingredient, ingredient_id)
@@ -46,7 +47,7 @@ def update_ingredient(ingredient_id: int, ingredient: IngredientUpdate, session:
     session.refresh(db_ingredient)
     return db_ingredient
 
-@router.delete("/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": HTTPUnprocessableContent_Ingredient}})
 def delete_ingredient(ingredient_id: int, session: Session = Depends(get_session)):
     """Delete an ingredient identified by its ID."""
     ingredient = session.get(Ingredient, ingredient_id)
@@ -60,8 +61,8 @@ def delete_ingredient(ingredient_id: int, session: Session = Depends(get_session
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
-                "msg": "Foreign key violation ! Check 'blocking recipe_items' field",
-                "blocking recipe_items": jsonable_encoder(ingredient.recipe_items),
-                "original error": str(error.orig)
+                "msg": "Foreign key violation ! Check 'blocking_recipe_items' field",
+                "blocking_recipe_items": jsonable_encoder(ingredient.recipe_items),
+                "original_error": str(error.orig)
             }
         )
