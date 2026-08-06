@@ -13,18 +13,21 @@ router = APIRouter(
 
 @router.post("/", response_model=MealPublicVerbose)
 def create_meal(meal: MealCreate, session: Session = Depends(get_session)):
-        db_meal = Meal.model_validate(meal)
-        session.add(db_meal)
-        session.commit()
-        session.refresh(db_meal)
-        return db_meal
+    """Create a new meal."""
+    db_meal = Meal.model_validate(meal)
+    session.add(db_meal)
+    session.commit()
+    session.refresh(db_meal)
+    return db_meal
 
 @router.get("/",  response_model=list[MealPublicVerbose])
 def get_all_meals(session: Session = Depends(get_session)):
+    """Get a list of all meals."""
     return session.exec(select(Meal)).all()
 
 @router.get("/{meal_id}",  response_model=MealPublicVerbose)
 def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
+    """Get a meal identified by its ID."""
     meal = session.get(Meal, meal_id)
     if not meal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")
@@ -33,6 +36,7 @@ def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
 
 @router.put("/{meal_id}",  response_model=MealPublicVerbose)
 def update_meal(meal_id: int, meal: MealUpdate, session: Session = Depends(get_session)):
+    """Update a meal identified by its ID."""
     db_meal = session.get(Meal, meal_id)
     if not db_meal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")
@@ -45,6 +49,7 @@ def update_meal(meal_id: int, meal: MealUpdate, session: Session = Depends(get_s
 
 @router.delete("/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_meal(meal_id: int, session: Session = Depends(get_session)):
+    """Delete a meal identified by its ID."""
     meal = session.get(Meal, meal_id)
     if not meal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")

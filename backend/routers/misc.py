@@ -11,10 +11,12 @@ router = APIRouter(
 @router.get("/")
 @router.get("/ping")
 def ping():
+    """Endpoint to check if the server is running."""
     return "pong"
 
 @router.get("/schema_diagram", response_class=FileResponse)
 def get_schema_diagram():
+    """Endpoint to get the database schema diagram as a PNG image."""
     filename = "/tmp/schema_diagram"
     generate_data_model_diagram(db_tables, filename)
     filename += ".svg"
@@ -26,4 +28,5 @@ def get_schema_diagram():
 
 @router.get("/favicon.ico", response_class=FileResponse)
 def get_favicon():
+    """Endpoint to serve the favicon."""
     return FileResponse("assets/sandwich.png")

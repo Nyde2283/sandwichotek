@@ -12,18 +12,21 @@ router = APIRouter(
 
 @router.post("/", response_model=ShelfPublicVerbose)
 def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
-        db_shelf = Shelf.model_validate(shelf)
-        session.add(db_shelf)
-        session.commit()
-        session.refresh(db_shelf)
-        return db_shelf
+    """Create a new shelf."""
+    db_shelf = Shelf.model_validate(shelf)
+    session.add(db_shelf)
+    session.commit()
+    session.refresh(db_shelf)
+    return db_shelf
 
 @router.get("/",  response_model=list[ShelfPublicVerbose])
 def get_all_shelfs(session: Session = Depends(get_session)):
+    """Get a list of all shelfs."""
     return session.exec(select(Shelf)).all()
 
 @router.get("/{shelf_id}",  response_model=ShelfPublicVerbose)
 def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
+    """Get a shelf identified by its ID."""
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
@@ -32,6 +35,7 @@ def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
 
 @router.put("/{shelf_id}",  response_model=ShelfPublicVerbose)
 def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(get_session)):
+    """Update a shelf identified by its ID."""
     db_shelf = session.get(Shelf, shelf_id)
     if not db_shelf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
@@ -44,6 +48,7 @@ def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(g
 
 @router.delete("/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
+    """Delete a shelf identified by its ID."""
     shelf = session.get(Shelf, shelf_id)
     if not shelf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")

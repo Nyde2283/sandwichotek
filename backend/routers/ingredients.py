@@ -12,18 +12,21 @@ router = APIRouter(
 
 @router.post("/", response_model=IngredientPublicVerbose)
 def create_ingredient(ingredient: IngredientCreate, session: Session = Depends(get_session)):
-        db_ingredient = Ingredient.model_validate(ingredient)
-        session.add(db_ingredient)
-        session.commit()
-        session.refresh(db_ingredient)
-        return db_ingredient
+    """Create a new ingredient."""
+    db_ingredient = Ingredient.model_validate(ingredient)
+    session.add(db_ingredient)
+    session.commit()
+    session.refresh(db_ingredient)
+    return db_ingredient
 
 @router.get("/",  response_model=list[IngredientPublicVerbose])
 def get_all_ingredients(session: Session = Depends(get_session)):
+    """Get a list of all ingredients."""
     return session.exec(select(Ingredient)).all()
 
 @router.get("/{ingredient_id}",  response_model=IngredientPublicVerbose)
 def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_session)):
+    """Get an ingredient identified by its ID."""
     ingredient = session.get(Ingredient, ingredient_id)
     if not ingredient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingredient not found")
@@ -32,6 +35,7 @@ def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_sess
 
 @router.put("/{ingredient_id}",  response_model=IngredientPublicVerbose)
 def update_ingredient(ingredient_id: int, ingredient: IngredientUpdate, session: Session = Depends(get_session)):
+    """Update an ingredient identified by its ID."""
     db_ingredient = session.get(Ingredient, ingredient_id)
     if not db_ingredient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingredient not found")
@@ -44,6 +48,7 @@ def update_ingredient(ingredient_id: int, ingredient: IngredientUpdate, session:
 
 @router.delete("/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ingredient(ingredient_id: int, session: Session = Depends(get_session)):
+    """Delete an ingredient identified by its ID."""
     ingredient = session.get(Ingredient, ingredient_id)
     if not ingredient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ingredient not found")
