@@ -12,7 +12,7 @@ def test_create_recipe_with_non_existent_meal(client, session, seeded_db):
             "quantity": 0.5,
         },
     ]
-    response = client.post("/recipes/999/ingredients", json=body)
+    response = client.put("/recipes/999/ingredients", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Meal not found"}
@@ -25,7 +25,7 @@ def test_create_recipe_with_non_existent_ingredient(client, session, seeded_db):
         },
     ]
 
-    response = client.post("/recipes/1/ingredients", json=body)
+    response = client.put("/recipes/1/ingredients", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Ingredient with id 999 not found"}
@@ -38,7 +38,7 @@ def test_create_recipe_with_non_existent_meal_and_ingredient(client, session, se
         },
     ]
 
-    response = client.post("/recipes/999/ingredients", json=body)
+    response = client.put("/recipes/999/ingredients", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Meal not found"}
@@ -59,7 +59,7 @@ def test_create_recipe(client, session, seeded_db):
         },
     ]
 
-    response = client.post(f"/recipes/{new_meal.id}/ingredients", json=body)
+    response = client.put(f"/recipes/{new_meal.id}/ingredients", json=body)
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["meal_id"] == new_meal.id
@@ -184,7 +184,7 @@ def test_delete_ingredient_from_non_existent_meal(client, session, seeded_db):
             1
         ]
     }
-    response = client.post("/recipes/999/delete-ingredients", json=body)
+    response = client.put("/recipes/999/delete-ingredients", json=body)
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Meal not found"}
 
@@ -195,7 +195,7 @@ def test_delete_non_existent_ingredient_from_recipe(client, session, seeded_db):
 
     body = {"ingredients_id": [999]}
 
-    response = client.post("/recipes/1/delete-ingredients", json=body)
+    response = client.put("/recipes/1/delete-ingredients", json=body)
     assert response.status_code == status.HTTP_200_OK
 
     assert response.json()["meal_id"] == 1
@@ -211,7 +211,7 @@ def test_delete_ingredient_from_recipe(client, session, seeded_db):
 
     body = {"ingredients_id": [meal.recipe_items[0].ingredient_id]}
 
-    response = client.post("/recipes/1/delete-ingredients", json=body)
+    response = client.put("/recipes/1/delete-ingredients", json=body)
     assert response.status_code == status.HTTP_200_OK
 
     assert response.json()["meal_id"] == 1

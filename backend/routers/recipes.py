@@ -26,7 +26,6 @@ def build_recipe(meal: Meal) -> Recipe:
         ]
     )
 
-@router.post("/{meal_id}/ingredients", response_model=Recipe)
 @router.put("/{meal_id}/ingredients", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def manage_recipe(meal_id: int, recipe: list[IngredientItemUpdate], session: Session = Depends(get_session)):
     """Add ingredients to the recipe of a meal, or update their quantity."""
@@ -88,7 +87,7 @@ def delete_recipe(meal_id: int, session: Session = Depends(get_session)):
     session.refresh(meal)
     return build_recipe(meal)
 
-@router.post("/{meal_id}/delete-ingredients", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.put("/{meal_id}/delete-ingredients", response_model=Recipe, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def delete_ingredient_from_recipe(meal_id: int, ingredients_to_delete: RecipeDeleteItems, session: Session = Depends(get_session)):
     """Delete one or several ingredients from the recipe of a meal."""
     meal = session.get(Meal, meal_id)
