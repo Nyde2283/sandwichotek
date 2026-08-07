@@ -135,8 +135,8 @@ class RecipeItemPublic(RecipeItemBase):
     pass
 
 class RecipeItemPublicVerbose(RecipeItemPublic):
-    meal: Meal
-    ingredient: Ingredient
+    meal: MealPublic
+    ingredient: IngredientPublic
 
 class RecipeItemUpdate(SQLModel):
     meal_id: int | None = None
@@ -179,8 +179,8 @@ class MealProductionCreate(MealProductionBase):
 class MealProductionPublic(MealProductionBase):
     id: int
 
-class MealProductionVerbose(MealProductionPublic):
-    meal: Meal | None
+class MealProductionPublicVerbose(MealProductionPublic):
+    meal: MealPublic | None
 
 class MealProductionUpdate(SQLModel):
     meal_id: int | None = None

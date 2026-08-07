@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from .db import init_db
 from .db.models import *
-from .routers import misc, shelfs, brands, meals, ingredients, recipes
+from .routers import misc, shelfs, brands, meals, ingredients, recipes, meal_productions
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -38,6 +38,7 @@ app.include_router(brands.router)
 app.include_router(meals.router)
 app.include_router(ingredients.router)
 app.include_router(recipes.router)
+app.include_router(meal_productions.router)
 
 def run_server():
     if APP_HOST is not None and APP_PORT is not None:
