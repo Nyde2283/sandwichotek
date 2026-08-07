@@ -60,10 +60,10 @@ def test_create_ingredient_with_optionals(client, session, seeded_db):
         **body,
         "id": 4
     }.items() <= db_ingredient.model_dump().items()
-    assert response.json()["shelf"] != None
-    assert response.json()["shelf"]["id"] == 1
-    assert response.json()["brand"] != None
-    assert response.json()["brand"]["id"] == 1
+    assert db_ingredient.shelf != None
+    assert db_ingredient.shelf.id == 1
+    assert db_ingredient.brand != None
+    assert db_ingredient.brand.id == 1
 
 # ---------------------------------------------------------------------------- #
 #                                      GET                                     #
