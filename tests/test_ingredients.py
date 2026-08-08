@@ -33,6 +33,30 @@ def test_create_ingredient_without_optionals(client, session):
         "id": 1
     }
 
+def test_create_ingredient_with_non_existent_shelf(client, session):
+    body = {
+        "name": "tomate",
+        "unit": "unit",
+        "shelf_id": 1
+    }
+    response = client.post("/ingredients", json=body)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Shelf not found"}
+    assert session.get(Ingredient, 1) == None
+
+def test_create_ingredient_with_non_existent_brand(client, session):
+    body = {
+        "name": "tomate",
+        "unit": "unit",
+        "brand_id": 1
+    }
+    response = client.post("/ingredients", json=body)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Brand not found"}
+    assert session.get(Ingredient, 1) == None
+
 def test_create_ingredient_with_optionals(client, session, seeded_db):
     body = {
         "name": "tomate",

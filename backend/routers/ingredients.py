@@ -14,6 +14,12 @@ router = APIRouter(
 @router.post("/", response_model=IngredientPublicVerbose)
 def create_ingredient(ingredient: IngredientCreate, session: Session = Depends(get_session)):
     """Create a new ingredient."""
+
+    if ingredient.shelf_id and not session.get(Shelf, ingredient.shelf_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Shelf not found")
+    if ingredient.brand_id and not session.get(Brand, ingredient.brand_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brand not found")
+
     db_ingredient = Ingredient.model_validate(ingredient)
     session.add(db_ingredient)
     session.commit()
