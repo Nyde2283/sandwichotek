@@ -56,6 +56,10 @@ def seeded_db(session):
                 "name": "comtois",
                 "veggy": True,
             },
+            {
+                "name": "RSAv",
+                "veggy": True,
+            },
         ],
         Ingredient: [
             {
@@ -99,6 +103,11 @@ def seeded_db(session):
                 "quantity": 25.0,
                 "meal_id": 2,
                 "ingredient_id": 3,
+            },
+            {
+                "quantity": 30.0,
+                "meal_id": 3,
+                "ingredient_id": 1,
             },
         ],
         MealProduction: [

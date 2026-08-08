@@ -44,7 +44,7 @@ def test_get_meal_list(client, seeded_db):
             **meal,
             "id": i + 1
         }.items() <= response.json()[i].items()
-        assert response.json()[i]["meal_productions"] != []
+        assert response.json()[i]["meal_productions"] != [] if i != 2 else response.json()[i]["meal_productions"] == []
         assert response.json()[i]["recipe_items"] != []
 
 def test_get_meal_by_id_on_empty_db(client):
@@ -111,6 +111,12 @@ def test_delete_meal_by_id_conflict_foreign_key(client, session, seeded_db):
     assert response.json()["detail"]["blocking_meal_productions"] != []
     assert response.json()["detail"]["original_error"] != None
     assert session.get(Meal, 1) != None
+
+def test_delete_meal_by_id_no_conflict_foreign_key(client, session, seeded_db):
+    response = client.delete("/meals/3")
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert session.get(Meal, 3) == None
 
 def test_delete_meal_by_id(client, session, seeded_db):
     # Delete object which reference the meal to make it deletable

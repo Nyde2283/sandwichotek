@@ -119,7 +119,7 @@ def test_get_recipe_list(client, session, seeded_db):
     response = client.get("/recipes")
     assert response.status_code == status.HTTP_200_OK
 
-    assert len(response.json()) == 2
+    assert len(response.json()) == 3
     assert response.json()[0]["meal_id"] == 1
     assert response.json()[0]["items"][0]["ingredient"]["id"] == 1
     assert response.json()[0]["items"][0]["quantity"] == 0.25

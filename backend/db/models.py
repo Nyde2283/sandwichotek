@@ -119,7 +119,7 @@ class IngredientUpdate(SQLModel):
 # ---------------------------------------------------------------------------- #
 
 class RecipeItemBase(SQLModel):
-    meal_id: int = Field(primary_key=True, foreign_key="meal.id", ondelete="RESTRICT")
+    meal_id: int = Field(primary_key=True, foreign_key="meal.id", ondelete="CASCADE")
     ingredient_id: int = Field(primary_key=True, foreign_key="ingredient.id", ondelete="RESTRICT")
     quantity: float
 
