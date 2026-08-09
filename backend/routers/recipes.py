@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, select
-from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
 from ..tools.response_models import *

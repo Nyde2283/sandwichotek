@@ -128,22 +128,10 @@ class RecipeItem(RecipeItemBase, table=True):
     ingredient: Ingredient = Relationship(back_populates="recipe_items")
 db_tables.append(RecipeItem)
 
-class RecipeItemCreate(RecipeItemBase):
-    pass
-
 class RecipeItemPublic(RecipeItemBase):
     pass
 
-class RecipeItemPublicVerbose(RecipeItemPublic):
-    meal: MealPublic
-    ingredient: IngredientPublic
-
-class RecipeItemUpdate(SQLModel):
-    meal_id: int | None = None
-    ingredient_id: int | None = None
-    quantity: int | None = None
-
-# ---------------------------------------------------------------------------- #
+# Abstract representation of recipes for the API
 
 class IngredientItem(SQLModel):
     ingredient: IngredientPublic

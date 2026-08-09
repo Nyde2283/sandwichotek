@@ -5,7 +5,6 @@ from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
 from ..tools.response_models import *
-from . import recipes
 
 router = APIRouter(
     prefix="/meals",
