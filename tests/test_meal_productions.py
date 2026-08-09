@@ -54,6 +54,21 @@ def test_get_meal_production_list_on_empty_db(client):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
+def test_search_meal_productions_by_meal_id_on_empty_db(client):
+    response = client.get("/meal_productions?meal_id=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_meal_productions_by_before_date_on_empty_db(client):
+    response = client.get("/meal_productions?before=2026-01-01")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_meal_productions_by_after_date_on_empty_db(client):
+    response = client.get("/meal_productions?after=2026-01-01")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
 def test_get_meal_production_list(client, seeded_db):
     response = client.get("/meal_productions")
     assert response.status_code == status.HTTP_200_OK
@@ -72,7 +87,7 @@ def test_get_meal_production_list(client, seeded_db):
         },
         {
             "meal_id": 2,
-            "date": "2026-04-17",
+            "date": "2026-04-15",
             "quantity": 14,
             "id": 2,
             "meal": {
@@ -82,6 +97,23 @@ def test_get_meal_production_list(client, seeded_db):
             }
         }
     ]
+
+def test_search_meal_productions_by_meal_id(client, seeded_db):
+    response = client.get("/meal_productions?meal_id=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert response.json()[0]["meal_id"] == 1
+
+def test_search_meal_productions_by_before_date(client, seeded_db):
+    response = client.get("/meal_productions?before=2026-04-17")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 2
+
+def test_search_meal_productions_by_after_date(client, seeded_db):
+    response = client.get("/meal_productions?after=2026-04-17")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert response.json()[0]["meal_id"] == 1
 
 def test_get_meal_production_by_id_on_empty_db(client):
     response = client.get("/meal_productions/1")

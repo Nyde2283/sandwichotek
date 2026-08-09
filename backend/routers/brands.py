@@ -21,9 +21,14 @@ def create_brand(brand: BrandCreate, session: Session = Depends(get_session)):
     return db_brand
 
 @router.get("/",  response_model=list[BrandPublicVerbose])
-def get_all_brands(session: Session = Depends(get_session)):
-    """Get a list of all brands."""
-    return session.exec(select(Brand)).all()
+def search_brands(q : str | None = None, session: Session = Depends(get_session)):
+    """Search for brands by name or ID."""
+    if q is None:
+        return session.exec(select(Brand)).all()
+    if q.isdigit():
+        return session.exec(select(Brand).where(Brand.id == int(q))).all()
+    else:
+        return session.exec(select(Brand).where(Brand.name.ilike(f"%{q}%"))).all() # type: ignore
 
 @router.get("/{brand_id}",  response_model=BrandPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_brand_by_id(brand_id: int, session: Session = Depends(get_session)):

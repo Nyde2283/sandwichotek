@@ -118,7 +118,7 @@ def seeded_db(session):
             },
             {
                 "meal_id": 2,
-                "date": date(2026, 4, 17),
+                "date": date(2026, 4, 15),
                 "quantity": 14,
             },
         ],

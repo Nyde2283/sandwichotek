@@ -98,6 +98,16 @@ def test_get_ingredient_list_on_empty_db(client):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
+def test_search_ingredients_by_name_on_empty_db(client):
+    response = client.get("/ingredients?q=tomate")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_ingredients_by_id_on_empty_db(client):
+    response = client.get("/ingredients?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
 def test_get_ingredient_list(client, seeded_db):
     response = client.get("/ingredients")
     assert response.status_code == status.HTTP_200_OK
@@ -107,6 +117,24 @@ def test_get_ingredient_list(client, seeded_db):
             **ingredient,
             "id": i + 1
         }.items() <= response.json()[i].items()
+
+def test_search_ingredients_by_id(client, seeded_db):
+    response = client.get("/ingredients?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Ingredient][0],
+        "id": 1
+    }.items() <= response.json()[0].items()
+
+def test_search_ingredients_by_name(client, seeded_db):
+    response = client.get("/ingredients?q=tomate")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Ingredient][0],
+        "id": 1
+    }.items() <= response.json()[0].items()
 
 def test_get_ingredient_by_id_on_empty_db(client):
     response = client.get("/ingredients/1")

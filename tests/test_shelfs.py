@@ -31,6 +31,16 @@ def test_get_shelf_list_on_empty_db(client):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
+def test_search_shelfs_by_name_on_empty_db(client):
+    response = client.get("/shelfs?q=fromages")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_shelfs_by_id_on_empty_db(client):
+    response = client.get("/shelfs?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
 def test_get_shelf_list(client, seeded_db):
     response = client.get("/shelfs")
     assert response.status_code == status.HTTP_200_OK
@@ -41,6 +51,24 @@ def test_get_shelf_list(client, seeded_db):
             "id": i + 1
         }.items() <= response.json()[i].items()
         assert response.json()[i]["ingredients"] != []
+
+def test_search_shelfs_by_id(client, seeded_db):
+    response = client.get("/shelfs?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Shelf][0],
+        "id": 1
+    }.items() <= response.json()[0].items()
+
+def test_search_shelfs_by_name(client, seeded_db):
+    response = client.get("/shelfs?q=fromages")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Shelf][2],
+        "id": 3
+    }.items() <= response.json()[0].items()
 
 def test_get_shelf_by_id_on_empty_db(client):
     response = client.get("/shelfs/1")

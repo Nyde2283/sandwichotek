@@ -23,9 +23,16 @@ def create_meal_production(meal_production: MealProductionCreate, session: Sessi
     return db_meal_production
 
 @router.get("/", response_model=list[MealProductionPublicVerbose])
-def get_all_meal_productions(session: Session = Depends(get_session)):
-    """Get a list of all meal productions."""
-    return session.exec(select(MealProduction)).all()
+def search_meal_productions(meal_id: int | None = None, before: date | None = None, after: date | None = None, session: Session = Depends(get_session)):
+    """Search for meal productions by meal or date."""
+    statement = select(MealProduction)
+    if meal_id is not None:
+        statement = statement.where(MealProduction.meal_id == meal_id)
+    if before is not None:
+        statement = statement.where(MealProduction.date <= before)
+    if after is not None:
+        statement = statement.where(MealProduction.date >= after)
+    return session.exec(statement).all()
 
 @router.get("/{meal_production_id}", response_model=MealProductionPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_meal_production_by_id(meal_production_id: int, session: Session = Depends(get_session)):

@@ -31,6 +31,16 @@ def test_get_brand_list_on_empty_db(client):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
+def test_search_brands_by_name_on_empty_db(client):
+    response = client.get("/brands?q=pouce")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_brands_by_id_on_empty_db(client):
+    response = client.get("/brands?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
 def test_get_brand_list(client, session, seeded_db):
     response = client.get("/brands")
     assert response.status_code == status.HTTP_200_OK
@@ -41,6 +51,24 @@ def test_get_brand_list(client, session, seeded_db):
             "id": i + 1
         }.items() <= response.json()[i].items()
         assert response.json()[i]["ingredients"] != []
+
+def test_search_brands_by_id(client, seeded_db):
+    response = client.get("/brands?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Brand][0],
+        "id": 1
+    }.items() <= response.json()[0].items()
+
+def test_search_brands_by_name(client, seeded_db):
+    response = client.get("/brands?q=pouce")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Brand][1],
+        "id": 2
+    }.items() <= response.json()[0].items()
 
 def test_get_brand_by_id_on_empty_db(client):
     response = client.get("/brands/1")

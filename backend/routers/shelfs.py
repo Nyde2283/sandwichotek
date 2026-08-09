@@ -21,9 +21,14 @@ def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
     return db_shelf
 
 @router.get("/",  response_model=list[ShelfPublicVerbose])
-def get_all_shelfs(session: Session = Depends(get_session)):
-    """Get a list of all shelfs."""
-    return session.exec(select(Shelf)).all()
+def search_shelfs(q: str | None = None, session: Session = Depends(get_session)):
+    """Search for shelfs by name or ID."""
+    if q is None:
+        return session.exec(select(Shelf)).all()
+    if q.isdigit():
+        return session.exec(select(Shelf).where(Shelf.id == int(q))).all()
+    else:
+        return session.exec(select(Shelf).where(Shelf.name.ilike(f"%{q}%"))).all() # type: ignore
 
 @router.get("/{shelf_id}",  response_model=ShelfPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):

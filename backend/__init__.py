@@ -32,6 +32,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.openapi_schema = None # disable caching of the OpenAPI schema to avoid issues with reloading in development
+
 app.include_router(misc.router)
 app.include_router(shelfs.router)
 app.include_router(brands.router)

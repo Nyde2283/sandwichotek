@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.encoders import jsonable_encoder
-from sqlmodel import Session, select
+from sqlmodel import Session, select, or_
 from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
@@ -27,9 +27,14 @@ def create_ingredient(ingredient: IngredientCreate, session: Session = Depends(g
     return db_ingredient
 
 @router.get("/",  response_model=list[IngredientPublicVerbose])
-def get_all_ingredients(session: Session = Depends(get_session)):
-    """Get a list of all ingredients."""
-    return session.exec(select(Ingredient)).all()
+def search_ingredients(q: str | None = None, session: Session = Depends(get_session)):
+    """Search for ingredients by name or ID."""
+    if q is None:
+        return session.exec(select(Ingredient)).all()
+    if q.isdigit():
+        return session.exec(select(Ingredient).where(Ingredient.id == int(q))).all()
+    else:
+        return session.exec(select(Ingredient).where(or_(Ingredient.name.ilike(f"%{q}%"), Ingredient.remark.ilike(f"%{q}%")))).all() # type: ignore
 
 @router.get("/{ingredient_id}",  response_model=IngredientPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_ingredient_by_id(ingredient_id: int, session: Session = Depends(get_session)):

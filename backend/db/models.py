@@ -57,7 +57,7 @@ class BrandUpdate(SQLModel):
 # ---------------------------------------------------------------------------- #
 
 class MealBase(SQLModel):
-    name: str
+    name: str = Field(index=True)
     veggy: bool
 
 class Meal(MealBase, table=True):

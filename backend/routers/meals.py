@@ -22,9 +22,17 @@ def create_meal(meal: MealCreate, session: Session = Depends(get_session)):
     return db_meal
 
 @router.get("/",  response_model=list[MealPublicVerbose])
-def get_all_meals(session: Session = Depends(get_session)):
-    """Get a list of all meals."""
-    return session.exec(select(Meal)).all()
+def search_meals(q: str | None = None, veggy: bool | None = None, session: Session = Depends(get_session)):
+    """Search for meals by name or ID."""
+    statement = select(Meal)
+    if veggy is not None:
+        statement = statement.where(Meal.veggy == veggy)
+    if q is None:
+        return session.exec(statement).all()
+    if q.isdigit():
+        return session.exec(statement.where(Meal.id == int(q))).all()
+    else:
+        return session.exec(statement.where(Meal.name.ilike(f"%{q}%"))).all() # type: ignore
 
 @router.get("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):

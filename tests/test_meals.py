@@ -35,6 +35,21 @@ def test_get_meal_list_on_empty_db(client):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
+def test_search_meals_by_name_on_empty_db(client):
+    response = client.get("/meals?q=comtois")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_meals_by_id_on_empty_db(client):
+    response = client.get("/meals?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+def test_search_meals_by_veggy_on_empty_db(client):
+    response = client.get("/meals?veggy=True")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
 def test_get_meal_list(client, seeded_db):
     response = client.get("/meals")
     assert response.status_code == status.HTTP_200_OK
@@ -46,6 +61,46 @@ def test_get_meal_list(client, seeded_db):
         }.items() <= response.json()[i].items()
         assert response.json()[i]["meal_productions"] != [] if i != 2 else response.json()[i]["meal_productions"] == []
         assert response.json()[i]["recipe_items"] != []
+
+def test_search_meals_by_id(client, seeded_db):
+    response = client.get("/meals?q=1")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Meal][0],
+        "id": 1
+    }.items() <= response.json()[0].items()
+
+def test_search_meals_by_name(client, seeded_db):
+    response = client.get("/meals?q=comtois")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Meal][1],
+        "id": 2
+    }.items() <= response.json()[0].items()
+
+def test_search_meals_by_veggy(client, seeded_db):
+    response = client.get("/meals?veggy=True")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 2
+    assert {
+        **seeded_db[Meal][1],
+        "id": 2
+    }.items() <= response.json()[0].items()
+    assert {
+        **seeded_db[Meal][2],
+        "id": 3
+    }.items() <= response.json()[1].items()
+
+def test_search_meals_by_name_and_veggy(client, seeded_db):
+    response = client.get("/meals?q=comtois&veggy=True")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()) == 1
+    assert {
+        **seeded_db[Meal][1],
+        "id": 2
+    }.items() <= response.json()[0].items()
 
 def test_get_meal_by_id_on_empty_db(client):
     response = client.get("/meals/1")
