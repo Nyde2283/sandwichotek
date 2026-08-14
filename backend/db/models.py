@@ -73,6 +73,9 @@ class MealCreate(MealBase):
 class MealPublic(MealBase):
     id: int
 
+class MealPublicVerbose(MealPublic):
+    recipe_items: list[RecipeItemPublicVerbose]
+
 class MealUpdate(SQLModel):
     name: str | None = None
     veggy: bool | None = None
@@ -124,25 +127,23 @@ class RecipeItem(RecipeItemBase, table=True):
     ingredient: Ingredient = Relationship(back_populates="recipe_items")
 db_tables.append(RecipeItem)
 
+class RecipeItemCreate(RecipeItemBase):
+    pass
+
 class RecipeItemPublic(RecipeItemBase):
     pass
 
+class RecipeItemPublicVerbose(RecipeItemPublic):
+    ingredient: IngredientPublicVerbose
+
+class RecipeItemUpdate(SQLModel):
+    quantity: float
+
 # Abstract representation of recipes for the API
 
-class IngredientItem(SQLModel):
-    ingredient: IngredientPublicVerbose
-    quantity: float
-
 class Recipe(SQLModel):
-    meal_id: int
-    items: list[IngredientItem]
-
-class IngredientItemUpdate(SQLModel):
-    ingredient_id: int
-    quantity: float
-
-class RecipeDeleteItems(SQLModel):
-    ingredients_id: list[int]
+    meal: MealPublic
+    recipe_items: list[RecipeItemPublicVerbose]
 
 # ---------------------------------------------------------------------------- #
 

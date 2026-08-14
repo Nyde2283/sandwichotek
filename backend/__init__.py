@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from .db import init_db
 from .db.models import *
-from .routers import misc, shelfs, brands, meals, ingredients, recipes, meal_productions, shopping_lists
+from .routers import misc, shelfs, brands, meals, ingredients, meal_productions, shopping_lists
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -39,7 +39,6 @@ app.include_router(shelfs.router)
 app.include_router(brands.router)
 app.include_router(meals.router)
 app.include_router(ingredients.router)
-app.include_router(recipes.router)
 app.include_router(meal_productions.router)
 app.include_router(shopping_lists.router)
 
