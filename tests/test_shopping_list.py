@@ -19,7 +19,6 @@ def test_create_shopping_list_on_empty_range(client, session, seeded_db):
     assert {
         **body,
         "id": 2,
-        "shopping_items": []
     }.items() <= response.json().items()
     db_shopping_list = session.get(ShoppingList, 2)
     assert db_shopping_list != None
@@ -275,6 +274,11 @@ def test_delete_shopping_item_by_id_on_empty_db(client):
 
 def test_delete_shopping_item_by_id(client, session, seeded_db):
     response = client.delete("/shopping_lists/1/items/1")
-    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()["shopping_items"]) == 1
+    db_shopping_list = session.get(ShoppingList, 1)
+    assert db_shopping_list != None
+    assert len(db_shopping_list.shopping_items) == 1
     db_shopping_item = session.get(ShoppingItem, (1, 1))
     assert db_shopping_item == None

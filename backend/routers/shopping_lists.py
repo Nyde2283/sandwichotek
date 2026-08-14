@@ -9,7 +9,7 @@ router = APIRouter(
     tags=["Shopping Lists"]
 )
 
-@router.post("/", response_model=ShoppingListPublic)
+@router.post("/", response_model=ShoppingListPublicVerbose)
 def create_shopping_list(shopping_list: ShoppingListCreate, session: Session = Depends(get_session)):
     """Create a new shopping list."""
     db_shopping_list = ShoppingList.model_validate(shopping_list)
@@ -39,7 +39,7 @@ def create_shopping_list(shopping_list: ShoppingListCreate, session: Session = D
     session.refresh(db_shopping_list)
     return db_shopping_list
 
-@router.post("/{shopping_list_id}/items", response_model=ShoppingListPublic, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.post("/{shopping_list_id}/items", response_model=ShoppingListPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def create_shopping_item(shopping_list_id: int, shopping_item: ShoppingItemCreate, session: Session = Depends(get_session)):
     """Create a new shopping item."""
     if session.get(ShoppingItem, (shopping_list_id, shopping_item.ingredient_id)) is not None:
@@ -70,7 +70,7 @@ def search_shopping_lists(before: date | None = None, after: date | None = None,
 
     return session.exec(statement).all()
 
-@router.get("/{shopping_list_id}", response_model=ShoppingListPublic, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.get("/{shopping_list_id}", response_model=ShoppingListPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_shopping_list_by_id(shopping_list_id: int, session: Session = Depends(get_session)):
     """Get a shopping list identified by its ID."""
     shopping_list = session.get(ShoppingList, shopping_list_id)
@@ -79,7 +79,7 @@ def get_shopping_list_by_id(shopping_list_id: int, session: Session = Depends(ge
     session.refresh(shopping_list)
     return shopping_list
 
-@router.put("/{shopping_list_id}", response_model=ShoppingListPublic, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.put("/{shopping_list_id}", response_model=ShoppingListPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_shopping_list(shopping_list_id: int, shopping_list: ShoppingListUpdate, session: Session = Depends(get_session)):
     """Update a shopping list identified by its ID."""
     db_shopping_list = session.get(ShoppingList, shopping_list_id)
@@ -94,7 +94,7 @@ def update_shopping_list(shopping_list_id: int, shopping_list: ShoppingListUpdat
     session.refresh(db_shopping_list)
     return db_shopping_list
 
-@router.put("/{shopping_list_id}/items/{ingredient_id}", response_model=ShoppingListPublic, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.put("/{shopping_list_id}/items/{ingredient_id}", response_model=ShoppingListPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_shopping_item(shopping_list_id: int, ingredient_id: int, shopping_item: ShoppingItemUpdate, session: Session = Depends(get_session)):
     """Update a shopping item identified by its ID."""
     db_shopping_item = session.get(ShoppingItem, (shopping_list_id, ingredient_id))
@@ -109,15 +109,19 @@ def update_shopping_item(shopping_list_id: int, ingredient_id: int, shopping_ite
     session.refresh(db_shopping_item)
     return db_shopping_item.shopping_list
 
-@router.delete("/{shopping_list_id}/items/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.delete("/{shopping_list_id}/items/{ingredient_id}", response_model=ShoppingListPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def delete_shopping_item(shopping_list_id: int, ingredient_id: int, session: Session = Depends(get_session)):
     """Delete a shopping item identified by its ID."""
     shopping_item = session.get(ShoppingItem, (shopping_list_id, ingredient_id))
     if not shopping_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopping item not found")
 
+    shopping_list = shopping_item.shopping_list
+
     session.delete(shopping_item)
     session.commit()
+    session.refresh(shopping_list)
+    return shopping_list
 
 @router.delete("/{shopping_list_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def delete_shopping_list(shopping_list_id: int, session: Session = Depends(get_session)):

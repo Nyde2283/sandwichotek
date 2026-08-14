@@ -190,6 +190,8 @@ class ShoppingListCreate(ShoppingListBase):
 
 class ShoppingListPublic(ShoppingListBase):
     id: int
+
+class ShoppingListPublicVerbose(ShoppingListPublic):
     shopping_items: list[ShoppingItemPublicVerbose]
 
 class ShoppingListUpdate(SQLModel):
