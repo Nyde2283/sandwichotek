@@ -20,7 +20,6 @@ def test_create_ingredient_without_optionals(client, session):
         "brand_id": None,
         "shelf": None,
         "brand": None,
-        "recipe_items": [],
         "id": 1
     }
     db_ingredient = session.get(Ingredient, 1)
@@ -68,10 +67,7 @@ def test_create_ingredient_with_optionals(client, session, seeded_db):
     response = client.post("/ingredients", json=body)
 
     assert response.status_code == status.HTTP_200_OK
-    assert {
-        **body,
-        "recipe_items": [],
-    }.items() <= response.json().items()
+    assert body.items() <= response.json().items()
     assert response.json().get("id") != None
     assert response.json()["shelf"] != None
     assert response.json()["shelf"]["id"] == 1
@@ -190,6 +186,7 @@ def test_delete_ingredient_by_id_conflict_foreign_key(client, session, seeded_db
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]["msg"] == "Foreign key violation ! Check 'blocking_recipe_items' field"
     assert response.json()["detail"]["blocking_recipe_items"] != []
+    assert response.json()["detail"]["blocking_shopping_items"] != []
     assert response.json()["detail"]["original_error"] != None
     assert session.get(Ingredient, 3) != None
 

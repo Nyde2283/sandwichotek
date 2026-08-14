@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["Meals"]
 )
 
-@router.post("/", response_model=MealPublicVerbose)
+@router.post("/", response_model=MealPublic)
 def create_meal(meal: MealCreate, session: Session = Depends(get_session)):
     """Create a new meal."""
     db_meal = Meal.model_validate(meal)
@@ -20,7 +20,7 @@ def create_meal(meal: MealCreate, session: Session = Depends(get_session)):
     session.refresh(db_meal)
     return db_meal
 
-@router.get("/",  response_model=list[MealPublicVerbose])
+@router.get("/",  response_model=list[MealPublic])
 def search_meals(q: str | None = None, veggy: bool | None = None, session: Session = Depends(get_session)):
     """Search for meals by name or ID."""
     statement = select(Meal)
@@ -33,7 +33,7 @@ def search_meals(q: str | None = None, veggy: bool | None = None, session: Sessi
     else:
         return session.exec(statement.where(Meal.name.ilike(f"%{q}%"))).all() # type: ignore
 
-@router.get("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.get("/{meal_id}",  response_model=MealPublic, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
     """Get a meal identified by its ID."""
     meal = session.get(Meal, meal_id)
@@ -42,7 +42,7 @@ def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
     session.refresh(meal)
     return meal
 
-@router.put("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+@router.put("/{meal_id}",  response_model=MealPublic, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
 def update_meal(meal_id: int, meal: MealUpdate, session: Session = Depends(get_session)):
     """Update a meal identified by its ID."""
     db_meal = session.get(Meal, meal_id)

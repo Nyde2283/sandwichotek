@@ -17,7 +17,7 @@ def build_recipe(meal: Meal) -> Recipe:
         meal_id=meal.id,
         items=[
             IngredientItem(
-                ingredient=IngredientPublic.model_validate(recipe_item.ingredient),
+                ingredient=IngredientPublicVerbose.model_validate(recipe_item.ingredient),
                 quantity=recipe_item.quantity
             )
             for recipe_item in meal.recipe_items

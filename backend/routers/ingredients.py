@@ -74,6 +74,7 @@ def delete_ingredient(ingredient_id: int, session: Session = Depends(get_session
             detail={
                 "msg": "Foreign key violation ! Check 'blocking_recipe_items' field",
                 "blocking_recipe_items": jsonable_encoder(ingredient.recipe_items),
+                "blocking_shopping_items": jsonable_encoder(ingredient.shopping_items),
                 "original_error": str(error.orig)
             }
         )

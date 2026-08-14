@@ -16,6 +16,7 @@ class HTTPUnprocessableContent_Shelf(__HTTPUnprocessableContent_Base):
 
 class HTTPUnprocessableContent_Ingredient(__HTTPUnprocessableContent_Base):
     blocking_recipe_items: list[RecipeItemPublic]
+    blocking_shopping_items: list[ShoppingItemPublic]
 
 class HTTPUnprocessableContent_Meal(__HTTPUnprocessableContent_Base):
     blocking_recipe_items: list[RecipeItemPublic]

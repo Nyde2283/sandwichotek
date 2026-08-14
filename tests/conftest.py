@@ -122,6 +122,27 @@ def seeded_db(session):
                 "quantity": 14,
             },
         ],
+        ShoppingList: [
+            {
+                "shopping_date": date(2026, 8, 13),
+                "range_begin": date(2026, 8, 17),
+                "range_end": date(2026, 8, 21),
+            },
+        ],
+        ShoppingItem: [
+            {
+                "shopping_list_id": 1,
+                "ingredient_id": 1,
+                "quantity": 10.0,
+                "bought": False,
+            },
+            {
+                "shopping_list_id": 1,
+                "ingredient_id": 2,
+                "quantity": 20.0,
+                "bought": True,
+            },
+        ],
     }
 
     for model in db_tables:

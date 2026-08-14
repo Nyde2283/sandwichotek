@@ -15,8 +15,6 @@ def test_create_meal(client, session):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         **body,
-        "meal_productions": [],
-        "recipe_items": [],
         "id": 1
     }
     db_meal = session.get(Meal, 1)
@@ -59,8 +57,6 @@ def test_get_meal_list(client, seeded_db):
             **meal,
             "id": i + 1
         }.items() <= response.json()[i].items()
-        assert response.json()[i]["meal_productions"] != [] if i != 2 else response.json()[i]["meal_productions"] == []
-        assert response.json()[i]["recipe_items"] != []
 
 def test_search_meals_by_id(client, seeded_db):
     response = client.get("/meals?q=1")
