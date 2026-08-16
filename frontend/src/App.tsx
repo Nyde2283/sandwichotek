@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Menu,
   X,
@@ -140,6 +140,13 @@ interface ShoppingListItem {
   taken: true | false
 }
 
+interface ProdCard {
+  productionId: number; // L'ID de la MealProduction en BDD (pour les update/delete)
+  mealId: number;       // L'ID du plat
+  title: string;        // Le nom du plat
+  units: number;        // La quantité produite
+  date: string;         // La date (ex: "2026-07-25")
+}
 
 // --- Mock Data ---
 
@@ -189,6 +196,47 @@ const SHOPPING_DATA: ShoppingList[] = [
   }
 ]
 
+/**
+ * Génère les dates de la semaine (format YYYY-MM-DD) à partir d'une date donnée.
+ * @param referenceDate La date de référence (par défaut aujourd'hui)
+ * @param includeWeekend Inclure le samedi et le dimanche (défaut : false)
+ */
+export const getWeekDates = (referenceDate = new Date(), includeWeekend = false): string[] => {
+  const date = new Date(referenceDate);
+  
+  // 1. Trouver le jour de la semaine (0 = Dimanche, 1 = Lundi, ..., 6 = Samedi)
+  const dayOfWeek = date.getDay();
+  
+  // 2. Calculer le décalage pour remonter jusqu'au Lundi
+  // En JS, le dimanche est 0. On le transforme en 7 pour simplifier les calculs.
+  const distanceToMonday = (dayOfWeek === 0 ? 7 : dayOfWeek) - 1;
+  
+  // 3. Poser la date au lundi de la semaine en cours
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - distanceToMonday);
+
+  // 4. Générer les 5 (ou 7) jours de la semaine
+  const daysCount = includeWeekend ? 7 : 5;
+  const weekDates: string[] = [];
+
+  for (let i = 0; i < daysCount; i++) {
+    const currentDay = new Date(monday);
+    currentDay.setDate(monday.getDate() + i);
+    
+    // Formatage au format 'YYYY-MM-DD' (ex: "2026-07-20")
+    const isoDate = currentDay.toISOString().split('T')[0];
+    weekDates.push(isoDate);
+  }
+
+  return weekDates;
+};
+
+const formatDateHeader = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+
 async function sendAPIPOST(route: String, payload: {}): Promise<Response> {
   const res = await fetch(`${BASE_URL}/${route}`, {
       method: 'POST',
@@ -224,7 +272,18 @@ async function sendAPIPUT(route: String, payload: {}): Promise<Response> {
   return res
 }
 
-const ClickToEdit = ({ initialValue, onSave }: { initialValue: string, onSave: (val: string) => void }) => {
+async function sendAPIDELETE(route: String): Promise<Response> {
+  const res = await fetch(`${BASE_URL}/${route}`, {
+      method: 'DELETE',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+  return res
+}
+
+const ClickToEdit = ({ initialValue, onSave, placeholder }: { initialValue: string, onSave: (val: string) => void, placeholder?: string }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -278,8 +337,8 @@ const ClickToEdit = ({ initialValue, onSave }: { initialValue: string, onSave: (
       onClick={() => setIsEditing(true)}
       className="group flex items-center justify-start cursor-pointer py-1 px-1 rounded-xl border-2 border-transparent hover:bg-surface-container-low animate-pop"
     >
-      <span className="text-lg font-semibold text-on-surface tracking-tight">
-        {value}
+      <span className={`text-lg font-semibold tracking-tight ${!value && placeholder ? 'text-on-surface-variant/50 italic' : 'text-on-surface'}`}>
+        {value || placeholder || ''}
       </span>
       <Pencil
         size={16}
@@ -959,20 +1018,121 @@ const RecipeCreatorView = () => {
 };
 
 const ProductsView = () => {
-  const [ingredients, setIngredients] = useState<Ingredient[]>([
-    // { id: '1', name: 'Tomate', productId: '1', brand: 'Pouce', quantity: 0.2, unit: 'unité' },
-    // { id: '2', name: 'Salade', productId: '2', brand: 'Auchan rouge', quantity: 10, unit: 'g' },
-    // { id: '3', name: 'Emmental rapé', productId: '2', brand: 'Pouce', quantity: 10, unit: 'g' },
-    // { id: '4', name: 'Saucisse', productId: '3', brand: 'Pouce', quantity: 6, unit: 'unité' },
-  ]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [persistedIngredients, setPersistedIngredients] = useState<Ingredient[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [shelfs, setShelfs] = useState<Shelf[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const hasUnsavedCard = useMemo(() => {
+    return ingredients.some((ing) => ing.id === 0);
+  }, [ingredients]);
 
   const addIngredient = () => {
-    //TODO valeur par défaut
-    setIngredients([...ingredients, { id: 0, name: '', brand: 0, shelf: 0, unit: 'unité', note: '' }]);
+    if (hasUnsavedCard) return;
+    setIngredients((prev) => [
+      ...prev,
+      { id: 0, name: '', brand: 0, shelf: 0, unit: 'unité', note: '' },
+    ]);
   };
 
-  const removeIngredient = (id: number) => {
-    setIngredients(ingredients.filter(ing => ing.id !== id));
+  const updateIngredientField = (
+    id: number,
+    field: keyof Ingredient,
+    value: any
+  ) => {
+    setIngredients((prev) =>
+      prev.map((ing) => (ing.id === id ? { ...ing, [field]: value } : ing))
+    );
+  };
+
+  const isIngredientDirty = (ing: Ingredient): boolean => {
+    if (ing.id === 0) return true;
+    const persisted = persistedIngredients.find((p) => p.id === ing.id);
+    if (!persisted) return true;
+    return (
+      ing.name.trim() !== persisted.name.trim() ||
+      ing.unit.trim() !== persisted.unit.trim() ||
+      ing.brand !== persisted.brand ||
+      ing.shelf !== persisted.shelf ||
+      (ing.note ?? '').trim() !== (persisted.note ?? '').trim()
+    );
+  };
+
+  const handleSaveIngredient = async (ing: Ingredient) => {
+    const payload = {
+      name: ing.name,
+      unit: ing.unit,
+      remark: ing.note || '',
+      shelf_id: ing.shelf > 0 ? ing.shelf : null,
+      brand_id: ing.brand > 0 ? ing.brand : null,
+    };
+
+    try {
+      let res: Response;
+      if (ing.id === 0) {
+        res = await sendAPIPOST('ingredients/', payload);
+      } else {
+        res = await sendAPIPUT(`ingredients/${ing.id}`, payload);
+      }
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Failed to save ingredient:', res.status, errorText);
+        alert(`Erreur lors de la sauvegarde (${res.status})`);
+        return;
+      }
+
+      const savedData = await res.json();
+      const updatedIngredient: Ingredient = {
+        id: savedData.id,
+        name: savedData.name ?? '',
+        unit: savedData.unit ?? 'unité',
+        note: savedData.remark ?? savedData.note ?? '',
+        brand: savedData.brand?.id ?? savedData.brand_id ?? 0,
+        shelf: savedData.shelf?.id ?? savedData.shelf_id ?? 0,
+      };
+
+      setIngredients((prev) =>
+        prev.map((item) => (item.id === ing.id ? updatedIngredient : item))
+      );
+
+      setPersistedIngredients((prev) => {
+        const exists = prev.some((p) => p.id === updatedIngredient.id);
+        if (exists) {
+          return prev.map((p) => (p.id === updatedIngredient.id ? updatedIngredient : p));
+        } else {
+          return [...prev, updatedIngredient];
+        }
+      });
+    } catch (err) {
+      console.error('Error saving ingredient:', err);
+    }
+  };
+
+  const handleDeleteIngredient = async (id: number) => {
+    if (id === 0) {
+      setIngredients((prev) => prev.filter((ing) => ing.id !== 0));
+      return;
+    }
+
+    try {
+      const res = await sendAPIDELETE(`ingredients/${id}`);
+      if (res.ok || res.status === 204) {
+        setIngredients((prev) => prev.filter((ing) => ing.id !== id));
+        setPersistedIngredients((prev) => prev.filter((ing) => ing.id !== id));
+      } else {
+        const errorText = await res.text();
+        console.error(`Failed to delete ingredient ${id}:`, res.status, errorText);
+        if (res.status === 422) {
+          alert('Impossible de supprimer cet ingrédient car il est utilisé dans des recettes ou des listes de courses.');
+        } else {
+          alert(`Erreur lors de la suppression (${res.status})`);
+        }
+      }
+    } catch (err) {
+      console.error(`Error deleting ingredient ${id}:`, err);
+    }
   };
 
   const loadIngredients = async () => {
@@ -992,21 +1152,18 @@ const ProductsView = () => {
       const mapped: Ingredient[] = json.map((it: any) => ({
         id: it.id ?? 0,
         name: it.name ?? '',
-        brand: it.brand?.id ?? 0,
-        shelf: it.brand?.id ?? 0,
+        brand: it.brand?.id ?? it.brand_id ?? 0,
+        shelf: it.shelf?.id ?? it.shelf_id ?? 0,
         unit: it.unit ?? 'unité',
-        note: it.note ?? '',
+        note: it.remark ?? it.note ?? '',
       }));
 
-      console.log(mapped);
-
       setIngredients(mapped);
+      setPersistedIngredients(mapped);
     } catch (err) {
       console.error('Error loading ingredients', err);
     }
   };
-
-  const [brands, setBrands] = useState<Brand[]>([]);
 
   const loadBrands = async () => {
     try {
@@ -1036,8 +1193,6 @@ const ProductsView = () => {
     }
   };
 
-  const [shelfs, setShelfs] = useState<Shelf[]>([]);
-
   const loadShelfs = async () => {
     try {
       const res = await sendAPIGET('shelfs/');
@@ -1057,8 +1212,6 @@ const ProductsView = () => {
         name: it.name ?? '',
       }));
 
-      console.log(mapped);
-
       setShelfs(mapped);
     } catch (err) {
       console.error('Error loading shelfs', err);
@@ -1070,6 +1223,13 @@ const ProductsView = () => {
     loadBrands();
     loadShelfs();
   }, []);
+
+  const filteredIngredients = ingredients.filter(
+    (ing) =>
+      ing.id === 0 ||
+      ing.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1077,12 +1237,9 @@ const ProductsView = () => {
       exit={{ opacity: 0, y: -20 }}
       className="max-w-6xl mx-auto w-full"
     >
-
       <header className="mb-6">
         <h2 className="text-4xl font-medium tracking-tight">{PRODUCTS_NAME}</h2>
       </header>
-
-
 
       <div className="p-4 h-full flex flex-col gap-4 bg-surface-container-lowest rounded-xl shadow-sm">
         <div className="relative">
@@ -1091,111 +1248,141 @@ const ProductsView = () => {
             className="w-full pl-10 pr-4 py-2 bg-surface-container rounded-full focus:ring-2 focus:ring-primary-light/50 text-sm placeholder:text-on-surface-variant/60"
             placeholder="Chercher un produit"
             type="text"
-          // TODO Dynamiser
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
         <div className="flex-col space-y-4">
           <AnimatePresence initial={false}>
-            {ingredients.map((ingredient: Ingredient) => (
-              <motion.div
-                key={ingredient.id}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="grid grid-cols-1 md:grid-cols-5 gap-3 p-3 items-center bg-surface-container-low/50 rounded-lg overflow-hidden"
-              >
-                <div className="w-full">
-                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Ingrédient
-                  </label>
-                  <ClickToEdit
-                    initialValue={ingredient.name}
-                    onSave={(newValue) => {
-                      console.log("Nouveau nom :", newValue);
-                    }}
-                  />
-                </div>
-
-                <div className="w-full">
-                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Unité
-                  </label>
-                  <ClickToEdit
-                    initialValue={ingredient.unit}
-                    onSave={(newValue) => {
-                      console.log("Nouvelle unité :", newValue);
-                    }}
-                  />
-                </div>
-
-                <div className="w-full">
-                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Marque
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={ingredient.brand}
-                      // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
-                      className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
-                    >
-                      <option value="" disabled>Aucune marque</option>
-                      {brands.map((brand) => (
-                        <option key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+            {filteredIngredients.map((ingredient: Ingredient) => {
+              const isDirty = isIngredientDirty(ingredient);
+              return (
+                <motion.div
+                  key={ingredient.id}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="grid grid-cols-1 md:grid-cols-5 gap-3 p-3 items-center bg-surface-container-low/50 rounded-lg overflow-hidden"
+                >
+                  <div className="w-full">
+                    <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Ingrédient
+                    </label>
+                    <ClickToEdit
+                      initialValue={ingredient.name}
+                      placeholder="Nom de l'ingrédient"
+                      onSave={(newValue) => {
+                        updateIngredientField(ingredient.id, 'name', newValue);
+                      }}
+                    />
                   </div>
-                </div>
 
-                <div className="w-full">
-                  <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <div className="w-full">
+                    <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Unité
+                    </label>
+                    <ClickToEdit
+                      initialValue={ingredient.unit}
+                      placeholder="Unité"
+                      onSave={(newValue) => {
+                        updateIngredientField(ingredient.id, 'unit', newValue);
+                      }}
+                    />
+                  </div>
+
+                  <div className="w-full">
+                    <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Marque
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={ingredient.brand || 0}
+                        onChange={(e) =>
+                          updateIngredientField(ingredient.id, 'brand', Number(e.target.value))
+                        }
+                        className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
+                      >
+                        <option value={0}>Aucune marque</option>
+                        {brands.map((brand) => (
+                          <option key={brand.id} value={brand.id}>
+                            {brand.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={14}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="w-full">
+                    <label className="block px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                       Rayon
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={ingredient.shelf}
-                      // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
-                      className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
-                    >
-                      <option value="" disabled>Aucun rayon</option>
-                      {shelfs.map((shelf) => (
-                        <option key={shelf.id} value={shelf.id}>
-                          {shelf.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={ingredient.shelf || 0}
+                        onChange={(e) =>
+                          updateIngredientField(ingredient.id, 'shelf', Number(e.target.value))
+                        }
+                        className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
+                      >
+                        <option value={0}>Aucun rayon</option>
+                        {shelfs.map((shelf) => (
+                          <option key={shelf.id} value={shelf.id}>
+                            {shelf.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={14}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex justify-start md:justify-end items-center">
-                  <button
-                    onClick={() => removeIngredient(ingredient.id)}
-                    className="p-2 text-tertiary/40 hover:text-tertiary transition-colors rounded-md"
-                    title="Supprimer"
-                  >
-                    <Trash2 size={20} />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+                  <div className="flex justify-start md:justify-end items-center gap-2">
+                    <button
+                      onClick={() => handleSaveIngredient(ingredient)}
+                      disabled={!isDirty}
+                      className={`p-2 transition-colors rounded-md ${
+                        isDirty
+                          ? 'text-primary hover:bg-primary/10 cursor-pointer'
+                          : 'text-on-surface-variant/30 cursor-not-allowed'
+                      }`}
+                      title={isDirty ? 'Enregistrer les modifications' : 'Aucune modification'}
+                    >
+                      <Save size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteIngredient(ingredient.id)}
+                      className="p-2 text-tertiary/40 hover:text-tertiary transition-colors rounded-md"
+                      title="Supprimer"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
 
         <div className="flex justify-between items-center pt-2">
           <button
             onClick={addIngredient}
-            className="flex items-center gap-2 text-primary font-semibold text-sm hover:opacity-80"
+            disabled={hasUnsavedCard}
+            className={`flex items-center gap-2 font-semibold text-sm transition-all ${
+              hasUnsavedCard
+                ? 'text-on-surface-variant/40 cursor-not-allowed opacity-50'
+                : 'text-primary hover:opacity-80'
+            }`}
           >
             <PlusCircle size={16} />
             Ajouter un ingrédient
           </button>
-          <div className="flex gap-4">
-            <button className="px-10 py-3 rounded-lg font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all">Enregistrer</button>
-          </div>
         </div>
       </div>
     </motion.div>
@@ -1267,7 +1454,7 @@ const ArticlesView = () => {
         id: it.id ?? 0,
         name: it.name ?? '',
         veggy: Boolean(it.veggy),
-        meal_productions: Array.isArray(it.meal_productions) ? it.meal_productions : [],
+        meal_productions: Array.isArray(it.meal_productions) ? (it.meal_productions as MealProduction[]) : [],
         recipe_items: [],
       }));
 
@@ -1471,47 +1658,154 @@ const ArticlesView = () => {
 };
 
 const PlanningView = () => {
-  type ProdCard = { id: string; title: string; units: number; };
-
   const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 
-  const [meals, setMeals] = useState<Record<string, ProdCard[]>>(() => ({
-    Lundi: [{ id: 'm1', title: 'Vosgien', units: 12 }],
-    Mardi: [
-      { id: 't1', title: 'Alpin', units: 8 },
-      { id: 't2', title: 'Chèvre frais', units: 6 }
-    ],
-    Mercredi: [{ id: 'w1', title: 'Wrap', units: 14 }],
-    Jeudi: [
-    ],
-    Vendredi: [
-      { id: 'f1', title: 'Comtois', units: 10 },
-      { id: 'f2', title: 'Lance roquette', units: 6 }
-    ]
-  }));
+  // 1. États
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [mealsList, setMealsList] = useState<Meal[]>([]);
+  const [productionsByDate, setProductionsByDate] = useState<Record<string, ProdCard[]>>({});
 
-  const addCard = (day: string) => {
+  // 2. Dates calculées pour la semaine
+  const currentWeekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
+
+  // 3. Navigation Semaine
+  const handlePreviousWeek = () => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() - 7);
+      return next;
+    });
+  };
+
+  const handleNextWeek = () => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + 7);
+      return next;
+    });
+  };
+
+  // 4. Regroupement des données API
+  const groupProductionsByDate = (mealsFromApi: Meal[]): Record<string, ProdCard[]> => {
+    const grouped: Record<string, ProdCard[]> = {};
+
+    mealsFromApi.forEach((meal) => {
+      meal.meal_productions.forEach((prod) => {
+        if (!grouped[prod.date]) {
+          grouped[prod.date] = [];
+        }
+
+        grouped[prod.date].push({
+          productionId: prod.id,
+          mealId: meal.id,
+          title: meal.name,
+          units: prod.quantity,
+          date: prod.date,
+        });
+      });
+    });
+
+    return grouped;
+  };
+
+  // 5. Chargement API
+  const loadMeals = async () => {
+    try {
+      const res = await sendAPIGET('meals/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch meals: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
+
+      const mapped: Meal[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        veggy: Boolean(it.veggy),
+        meal_productions: Array.isArray(it.meal_productions)
+          ? it.meal_productions.map((prod: any): MealProduction => ({
+              id: prod.id ?? 0,
+              meal_id: prod.meal_id ?? it.id ?? 0,
+              date: prod.date ?? '',
+              quantity: prod.quantity ?? 0,
+            }))
+          : [],
+        recipe_items: Array.isArray(it.recipe_items)
+          ? it.recipe_items.map((item: any): RecipeItem => ({
+              ingredient: {
+                id: item.ingredient?.id ?? item.ingredient_id ?? 0,
+                name: item.ingredient?.name ?? '',
+                note: item.ingredient?.note ?? '',
+                brand: item.ingredient?.brand ?? 0,
+                shelf: item.ingredient?.shelf ?? 0,
+                unit: item.ingredient?.unit ?? '',
+              },
+              quantity: item.quantity ?? 0,
+            }))
+          : [],
+      }));
+
+      setMealsList(mapped);
+      setProductionsByDate(groupProductionsByDate(mapped));
+    } catch (err) {
+      console.error('Error loading meals', err);
+    }
+  };
+
+  useEffect(() => {
+    loadMeals();
+  }, []);
+
+  // 6. Interactions (Ajout / Changement de Plat / Supprimer)
+  const addCard = (dateStr: string) => {
+    const defaultMeal = mealsList[0];
+    if (!defaultMeal) return;
+
     const newCard: ProdCard = {
-      id: Date.now().toString(),
-      title: 'New Meal',
-      units: 100
+      productionId: Date.now(), // Temporaire en local avant sync API
+      mealId: defaultMeal.id,
+      title: defaultMeal.name,
+      units: 10,
+      date: dateStr,
     };
-    setMeals((prev) => ({
+
+    setProductionsByDate((prev) => ({
       ...prev,
-      [day]: [...(prev[day] || []), newCard]
+      [dateStr]: [...(prev[dateStr] || []), newCard],
     }));
   };
 
-  const removeMeal = (day: string, id: string) => {
-    setMeals((prev) => ({
+  const removeMeal = (dateStr: string, productionId: number) => {
+    setProductionsByDate((prev) => ({
       ...prev,
-      [day]: prev[day].filter(card => card.id !== id)
+      [dateStr]: (prev[dateStr] || []).filter((card) => card.productionId !== productionId),
     }));
   };
 
-  {/* TODO options dynamiques */ }
-  const meals_names = ["Alpin", "Homard"]
-  const dates = ["26 Oct.", "27 Oct.", "28 Oct.", "29 Oct.", "30 Oct."]
+  const handleMealChange = (dateStr: string, productionId: number, newMealId: number) => {
+    const targetMeal = mealsList.find((m) => m.id === newMealId);
+    if (!targetMeal) return;
+
+    setProductionsByDate((prev) => ({
+      ...prev,
+      [dateStr]: (prev[dateStr] || []).map((card) =>
+        card.productionId === productionId
+          ? { ...card, mealId: targetMeal.id, title: targetMeal.name }
+          : card
+      ),
+    }));
+  };
+
+  const handleQuantityChange = (dateStr: string, productionId: number, newQty: number) => {
+    setProductionsByDate((prev) => ({
+      ...prev,
+      [dateStr]: (prev[dateStr] || []).map((card) =>
+        card.productionId === productionId ? { ...card, units: newQty } : card
+      ),
+    }));
+  };
 
   return (
     <motion.div
@@ -1520,89 +1814,136 @@ const PlanningView = () => {
       exit={{ opacity: 0, y: -20 }}
       className="space-y-8 max-w-[1200px] mx-auto"
     >
+      {/* Header avec Navigation de Semaine */}
       <div className="flex items-end justify-between mb-8">
         <div>
-          <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">Planning hebdomadaire</h2>
+          <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">
+            Planning hebdomadaire
+          </h2>
         </div>
         <div className="flex items-center bg-surface-container-low p-1 rounded-lg">
-          {/* TODO ajouter boutons de navigation */}
-          <button className="p-2 hover:bg-surface-container rounded transition-colors"><ChevronLeft size={18} /></button>
-          <div className="px-6 py-2"><span className="font-semibold text-sm">{dates[0]} - {dates[dates.length - 1]}</span></div>
-          <button className="p-2 hover:bg-surface-container rounded transition-colors"><ChevronRight size={18} /></button>
+          <button
+            onClick={handlePreviousWeek}
+            className="p-2 hover:bg-surface-container rounded transition-colors"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div className="px-6 py-2">
+            <span className="font-semibold text-sm">
+              {formatDateHeader(currentWeekDates[0])} - {formatDateHeader(currentWeekDates[4])}
+            </span>
+          </div>
+          <button
+            onClick={handleNextWeek}
+            className="p-2 hover:bg-surface-container rounded transition-colors"
+          >
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
 
+      {/* Grille des 5 Jours */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        {days.map((day, idx) => (
-          <div key={day} className="flex flex-col gap-4">
-            <div className="px-4 py-2 bg-surface-container rounded-t-lg">
-              <h3 className="font-label text-xs font-semibold uppercase tracking-widest text-on-surface-variant">{day}</h3>
-              <p className="text-xs text-on-surface-variant/70">{dates[idx]}</p>
+        {days.map((dayName, idx) => {
+          const dateStr = currentWeekDates[idx];
+          const dayCards = productionsByDate[dateStr] || [];
+
+          return (
+            <div key={dayName} className="flex flex-col gap-4">
+              {/* En-tête du jour */}
+              <div className="px-4 py-2 bg-surface-container rounded-t-lg">
+                <h3 className="font-label text-xs font-semibold uppercase tracking-widest text-on-surface-variant">
+                  {dayName}
+                </h3>
+                <p className="text-xs text-on-surface-variant/70">
+                  {formatDateHeader(dateStr)}
+                </p>
+              </div>
+
+              {/* Cartes de Production */}
+              <AnimatePresence>
+                {dayCards.map((card) => (
+                  <motion.div
+                    key={card.productionId}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="p-0"
+                  >
+                    <div className="bg-surface-container-lowest p-3 sm:p-4 rounded-xl shadow-sm border-l-4 border-primary/0 animate-pop">
+                      {/* Select Plat */}
+                      <div className="relative mb-3">
+                        <select
+                          value={card.mealId}
+                          onChange={(e) =>
+                            handleMealChange(dateStr, card.productionId, Number(e.target.value))
+                          }
+                          className="w-full appearance-none bg-surface-container border-none rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-light/50 pr-9 cursor-pointer outline-none font-semibold text-on-surface"
+                        >
+                          {mealsList.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={14}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
+                        />
+                      </div>
+
+                      {/* Quantité + Poubelle */}
+                      <div className="grid grid-cols-1 min-[180px]:grid-cols-[1fr_auto] items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider shrink-0">
+                            Qté :
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <ClickToEdit
+                              initialValue={card.units.toString()}
+                              onSave={(newValue) =>
+                                handleQuantityChange(
+                                  dateStr,
+                                  card.productionId,
+                                  Number(newValue) || 0
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-center min-[180px]:justify-end">
+                          <button
+                            className="p-2 text-tertiary/40 hover:text-tertiary hover:bg-tertiary/5 rounded-full transition-all shrink-0"
+                            onClick={() => removeMeal(dateStr, card.productionId)}
+                            title="Supprimer"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Bouton Ajouter */}
+              <div className="py-0">
+                <button
+                  onClick={() => addCard(dateStr)}
+                  className="w-full bg-surface-container-lowest p-4 rounded-xl border-dashed border-2 border-outline-variant/30 flex flex-col items-center justify-center hover:border-primary/50 transition-colors group cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary mb-2 transition-colors">
+                    +
+                  </span>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant group-hover:text-primary transition-colors">
+                    Ajouter un plat
+                  </span>
+                </button>
+              </div>
             </div>
-            <AnimatePresence>
-              {(meals[day] || []).map((card) => (
-<motion.div
-  key={card.id}
-  initial={{ opacity: 0, height: 0 }}
-  animate={{ opacity: 1, height: 'auto' }}
-  exit={{ opacity: 0, height: 0 }}
-  className="p-0"
->
-  <div className="bg-surface-container-lowest p-3 sm:p-4 rounded-xl shadow-sm border-l-4 border-primary/0 animate-pop">
-    {/* 1. Zone Select : On réduit un peu le padding interne */}
-    <div className="relative mb-3">
-      <select className="w-full appearance-none bg-surface-container border-none rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-light/50 pr-9 cursor-pointer outline-none font-semibold text-on-surface">
-        <option>{card.title}</option>
-        {meals_names.map((name) => (
-          <option key={name}>{name}</option>
-        ))}
-      </select>
-      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
-    </div>
-
-    <div className="grid grid-cols-1 min-[180px]:grid-cols-[1fr_auto] items-center gap-2">
-  
-  {/* Bloc Quantité : prend toute la place (1fr) quand c'est sur deux lignes */}
-  <div className="flex items-center gap-2 min-w-0">
-    <span className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider shrink-0">
-      Qté :
-    </span>
-    <div className="flex-1 min-w-0">
-      <ClickToEdit
-        initialValue={card.units.toString()}
-        onSave={(newValue) => console.log(newValue)}
-      />
-    </div>
-  </div>
-
-  {/* Bloc Poubelle : Se centre en mode 1 colonne, se cale à droite en mode 2 colonnes */}
-  <div className="flex justify-center min-[180px]:justify-end">
-    <button
-      className="p-2 text-tertiary/40 hover:text-tertiary hover:bg-tertiary/5 rounded-full transition-all shrink-0"
-      onClick={() => removeMeal(day, card.id)}
-      title="Supprimer"
-    >
-      <Trash2 size={16} />
-    </button>
-  </div>
-</div>
-  </div>
-</motion.div>
-              ))}
-            </AnimatePresence>
-
-            {/* dashed add card */}
-            <div className="py-0">
-              <button
-                onClick={() => addCard(day)}
-                className="w-full bg-surface-container-lowest p-4 rounded-xl border-dashed border-2 border-outline-variant/30 flex flex-col items-center justify-center hover:border-primary/50 transition-colors group cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary mb-2 transition-colors">+</span>
-                <span className="text-[10px] uppercase font-bold tracking-widest material-symbols-outlined text-on-surface-variant group-hover:text-primary mb-2 transition-colors">Ajouter un plat</span>
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </motion.div>
   );
