@@ -712,53 +712,85 @@ const ShoppingListTable = () => {
 const RecipeCreatorView = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [selectedMeal, setSelectedMeal] = useState<Meal>();
+  const [selectedMeal, setSelectedMeal] = useState<Meal>({
+    id: 0,
+    name: "Nom de la recette",
+    veggy: false,
+    meal_productions: [],
+    recipe_items: [],
+  });
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [persistedItemIngredientIds, setPersistedItemIngredientIds] = useState<Record<number, Set<number>>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Charge la liste des recettes depuis l'API
-  const loadRecipes = async () => {
+  // Charge la liste des ingrédients depuis l'API
+  const loadIngredients = async () => {
     try {
-      const res = await sendAPIGET('recipes/');
+      const res = await sendAPIGET('ingredients/');
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`Failed to fetch recipes: ${res.status} ${text}`);
+        throw new Error(`Failed to fetch ingredients: ${res.status} ${text}`);
       }
 
       const json = await res.json();
-      if (!Array.isArray(json)) {
-        console.warn('Unexpected recipes response:', json);
-        return;
-      }
+      if (!Array.isArray(json)) return;
 
-      const mapped: Recipe[] = json.map((it: any) => ({
-        meal_id: it.meal_id ?? 0,
-        items: Array.isArray(it.items)
-          ? it.items.map((item: any) => ({
-              quantity: item.quantity ?? 0,
-              ingredient: {
-                id: item.ingredient?.id ?? 0,
-                name: item.ingredient?.name ?? '',
-                unit: item.ingredient?.unit ?? '',
-                note: item.ingredient?.remark ?? '',
-                brand: item.ingredient?.brand_id ?? 0,
-                shelf: item.ingredient?.shelf_id ?? 0,
-              },
-            }))
-          : [],
+      const mapped: Ingredient[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        name: it.name ?? '',
+        brand: it.brand?.id ?? it.brand_id ?? 0,
+        shelf: it.shelf?.id ?? it.shelf_id ?? 0,
+        unit: it.unit ?? 'unité',
+        note: it.remark ?? it.note ?? '',
       }));
 
-      setRecipes(mapped);
-
-      // Met à jour l'ID sélectionné par défaut une fois les recettes chargées
-      if (mapped.length > 0 && mapped[0].meal_id) {
-        setSelectedMeal(meals.find((m) => m.id == mapped[0].meal_id));
-      }
+      setIngredients(mapped);
     } catch (err) {
-      console.error('Error loading recipes', err);
+      console.error('Error loading ingredients', err);
+    }
+  };
+
+  // Charge la recette pour un repas donné
+  const loadRecipeForMeal = async (mealId: number) => {
+    if (!mealId || mealId <= 0) return;
+    try {
+      const res = await sendAPIGET(`meals/${mealId}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch meal recipe: ${res.status} ${text}`);
+      }
+
+      const data = await res.json();
+      const items: RecipeItem[] = Array.isArray(data.recipe_items)
+        ? data.recipe_items.map((item: any) => ({
+            quantity: item.quantity ?? 0,
+            ingredient: {
+              id: item.ingredient?.id ?? item.ingredient_id ?? 0,
+              name: item.ingredient?.name ?? '',
+              unit: item.ingredient?.unit ?? 'unité',
+              note: item.ingredient?.remark ?? item.ingredient?.note ?? '',
+              brand: item.ingredient?.brand?.id ?? item.ingredient?.brand_id ?? 0,
+              shelf: item.ingredient?.shelf?.id ?? item.ingredient?.shelf_id ?? 0,
+            },
+          }))
+        : [];
+
+      setRecipes((prev) => {
+        const filtered = prev.filter((r) => r.meal_id !== mealId);
+        return [...filtered, { meal_id: mealId, items }];
+      });
+
+      setPersistedItemIngredientIds((prev) => ({
+        ...prev,
+        [mealId]: new Set(items.map((it) => it.ingredient.id)),
+      }));
+    } catch (err) {
+      console.error(`Error loading recipe for meal ${mealId}`, err);
     }
   };
 
   // Charge la liste des repas depuis l'API
-  const loadMeals = async () => {
+  const loadMeals = async (targetMealId?: number) => {
     try {
       const res = await sendAPIGET('meals/');
       if (!res.ok) {
@@ -778,91 +810,363 @@ const RecipeCreatorView = () => {
       }));
 
       setMeals(mapped);
+
+      if (targetMealId !== undefined) {
+        if (targetMealId === 0) {
+          setSelectedMeal({
+            id: 0,
+            name: "Nom de la recette",
+            veggy: false,
+            meal_productions: [],
+            recipe_items: [],
+          });
+        } else {
+          const found = mapped.find((m) => m.id === targetMealId);
+          if (found) {
+            setSelectedMeal(found);
+            await loadRecipeForMeal(found.id);
+          }
+        }
+      } else if (mapped.length > 0) {
+        setSelectedMeal((prev) => {
+          if (!prev || prev.id === 0) {
+            loadRecipeForMeal(mapped[0].id);
+            return mapped[0];
+          }
+          const existing = mapped.find((m) => m.id === prev.id);
+          if (existing) return existing;
+          loadRecipeForMeal(mapped[0].id);
+          return mapped[0];
+        });
+      }
     } catch (err) {
       console.error('Error loading meals', err);
     }
   };
 
   useEffect(() => {
-    loadRecipes();
+    loadIngredients();
     loadMeals();
   }, []);
 
   // Dérivation directe de la recette active
-  const selectedRecipe = recipes.find((r) => r.meal_id === selectedMeal?.id);
+  const selectedRecipe = recipes.find((r) => r.meal_id === (selectedMeal?.id ?? 0)) || {
+    meal_id: selectedMeal?.id ?? 0,
+    items: [],
+  };
 
-  // Sauvegarde d'un ingrédient de la recette
-  const saveRecipeItem = async (item: RecipeItem) => {
-    try {
-      const payload = {
-        name: item.ingredient.name,
-        unit: item.ingredient.unit,
-        remark: item.ingredient.note,
-        shelf_id: item.ingredient.shelf,
-        brand_id: item.ingredient.brand,
-      };
-
-      const res = await sendAPIPOST('ingredients/', payload);
-      if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
-      return await res.json();
-    } catch (err) {
-      console.error('Error saving ingredient', err);
+  // Sélection d'un repas depuis le dropdown
+  const handleSelectMeal = (mealId: number) => {
+    if (mealId === 0) {
+      setSelectedMeal({
+        id: 0,
+        name: "Nom de la recette",
+        veggy: false,
+        meal_productions: [],
+        recipe_items: [],
+      });
+      setRecipes((prev) => {
+        const filtered = prev.filter((r) => r.meal_id !== 0);
+        return [...filtered, { meal_id: 0, items: [] }];
+      });
+    } else {
+      const meal = meals.find((m) => m.id === mealId);
+      if (meal) {
+        setSelectedMeal(meal);
+        loadRecipeForMeal(meal.id);
+      }
     }
   };
 
-  // Suppression locale d'un ingrédient
-  const removeRecipeItem = (ingredientId: number) => {
-    if (!selectedRecipe) return;
+  // Mise à jour locale du nom de la recette
+  const handleNameChange = (newName: string) => {
+    const updatedName = newName.trim() || "Nom de la recette";
+    setSelectedMeal((prev) =>
+      prev
+        ? { ...prev, name: updatedName }
+        : { id: 0, name: updatedName, veggy: false, meal_productions: [], recipe_items: [] }
+    );
+    if (selectedMeal && selectedMeal.id > 0) {
+      setMeals((prev) =>
+        prev.map((m) => (m.id === selectedMeal.id ? { ...m, name: updatedName } : m))
+      );
+    }
+  };
 
-    setRecipes((prevRecipes) =>
-      prevRecipes.map((r) => {
-        if (r.meal_id !== selectedMeal?.id) return r;
+  // Mise à jour locale du statut Veggie
+  const handleVeggyToggle = (isVeggy: boolean) => {
+    setSelectedMeal((prev) =>
+      prev
+        ? { ...prev, veggy: isVeggy }
+        : { id: 0, name: "Nom de la recette", veggy: isVeggy, meal_productions: [], recipe_items: [] }
+    );
+    if (selectedMeal && selectedMeal.id > 0) {
+      setMeals((prev) =>
+        prev.map((m) => (m.id === selectedMeal.id ? { ...m, veggy: isVeggy } : m))
+      );
+    }
+  };
+
+  // Ajout d'un ingrédient à la recette
+  const addRecipeItem = () => {
+    const defaultIngredient = ingredients.length > 0
+      ? ingredients[0]
+      : { id: 0, name: '', unit: 'unité', note: '', brand: 0, shelf: 0 };
+
+    const newItem: RecipeItem = {
+      ingredient: { ...defaultIngredient },
+      quantity: 0,
+    };
+
+    const currentMealId = selectedMeal?.id ?? 0;
+    setRecipes((prev) => {
+      const existing = prev.find((r) => r.meal_id === currentMealId);
+      if (existing) {
+        return prev.map((r) =>
+          r.meal_id === currentMealId
+            ? { ...r, items: [...r.items, newItem] }
+            : r
+        );
+      }
+      return [...prev, { meal_id: currentMealId, items: [newItem] }];
+    });
+  };
+
+  // Changement d'ingrédient pour un item
+  const handleIngredientChange = (itemIndex: number, newIngredientId: number) => {
+    const newIng = ingredients.find((i) => i.id === newIngredientId);
+    if (!newIng) return;
+
+    const currentMealId = selectedMeal?.id ?? 0;
+    setRecipes((prev) =>
+      prev.map((r) => {
+        if (r.meal_id !== currentMealId) return r;
+        const updatedItems = [...r.items];
+        updatedItems[itemIndex] = {
+          ...updatedItems[itemIndex],
+          ingredient: { ...newIng },
+        };
+        return { ...r, items: updatedItems };
+      })
+    );
+  };
+
+  // Changement de la quantité d'un item
+  const handleQuantityChange = (itemIndex: number, newQuantity: number) => {
+    const currentMealId = selectedMeal?.id ?? 0;
+    setRecipes((prev) =>
+      prev.map((r) => {
+        if (r.meal_id !== currentMealId) return r;
+        const updatedItems = [...r.items];
+        updatedItems[itemIndex] = {
+          ...updatedItems[itemIndex],
+          quantity: newQuantity,
+        };
+        return { ...r, items: updatedItems };
+      })
+    );
+  };
+
+  // Suppression d'un ingrédient (API si persisté, local si non persisté)
+  const handleDeleteItem = async (itemIndex: number, item: RecipeItem) => {
+    const currentMealId = selectedMeal?.id ?? 0;
+    const isPersisted =
+      currentMealId > 0 &&
+      persistedItemIngredientIds[currentMealId]?.has(item.ingredient.id);
+
+    if (isPersisted) {
+      try {
+        const res = await sendAPIDELETE(
+          `meals/${currentMealId}/ingredients/${item.ingredient.id}`
+        );
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error(`Failed to delete recipe item: ${res.status} ${errText}`);
+          alert(`Erreur lors de la suppression de l'ingrédient (${res.status})`);
+          return;
+        }
+
+        setPersistedItemIngredientIds((prev) => {
+          const nextSet = new Set(prev[currentMealId]);
+          nextSet.delete(item.ingredient.id);
+          return { ...prev, [currentMealId]: nextSet };
+        });
+      } catch (err) {
+        console.error('Error deleting recipe item', err);
+        alert("Erreur lors de la suppression de l'ingrédient");
+        return;
+      }
+    }
+
+    setRecipes((prev) =>
+      prev.map((r) => {
+        if (r.meal_id !== currentMealId) return r;
         return {
           ...r,
-          items: r.items.filter((item) => item.ingredient.id !== ingredientId),
+          items: r.items.filter((_, idx) => idx !== itemIndex),
         };
       })
     );
   };
 
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-
-  const loadIngredients = async () => {
+  // Suppression du repas (DELETE /meals/{meal_id})
+  const handleDeleteMeal = async () => {
+    if (!selectedMeal || selectedMeal.id <= 0) return;
     try {
-      const res = await sendAPIGET('ingredients/');
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to fetch ingredients: ${res.status} ${text}`);
+      const res = await sendAPIDELETE(`meals/${selectedMeal.id}`);
+      if (res.ok || res.status === 204) {
+        const deletedId = selectedMeal.id;
+        const remainingMeals = meals.filter((m) => m.id !== deletedId);
+        setMeals(remainingMeals);
+        setRecipes((prev) => prev.filter((r) => r.meal_id !== deletedId));
+        setPersistedItemIngredientIds((prev) => {
+          const next = { ...prev };
+          delete next[deletedId];
+          return next;
+        });
+
+        if (remainingMeals.length > 0) {
+          setSelectedMeal(remainingMeals[0]);
+          await loadRecipeForMeal(remainingMeals[0].id);
+        } else {
+          setSelectedMeal({
+            id: 0,
+            name: "Nom de la recette",
+            veggy: false,
+            meal_productions: [],
+            recipe_items: [],
+          });
+        }
+      } else {
+        const errorText = await res.text();
+        console.error(`Failed to delete meal ${selectedMeal.id}:`, res.status, errorText);
+        if (res.status === 422) {
+          alert('Impossible de supprimer ce plat car il est utilisé dans des plannings ou contient des éléments liés.');
+        } else {
+          alert(`Erreur lors de la suppression (${res.status})`);
+        }
       }
-
-      const json = await res.json();
-      if (!Array.isArray(json)) {
-        console.warn('Unexpected ingredients response:', json);
-        return;
-      }
-
-      const mapped: Ingredient[] = json.map((it: any) => ({
-        id: it.id ?? 0,
-        name: it.name ?? '',
-        brand: it.brand?.id ?? 0,
-        shelf: it.brand?.id ?? 0,
-        unit: it.unit ?? 'unité',
-        note: it.note ?? '',
-      }));
-
-      console.log(mapped);
-
-      setIngredients(mapped);
     } catch (err) {
-      console.error('Error loading ingredients', err);
+      console.error(`Error deleting meal ${selectedMeal.id}:`, err);
     }
   };
 
-  useEffect(() => {
-    loadIngredients();
-    loadRecipes();
-    loadMeals();
-  }, []);
+  // Sauvegarde globale du plat (POST si id == 0, PUT si id > 0) et de ses ingrédients
+  const handleSaveMeal = async () => {
+    setIsSaving(true);
+    try {
+      const mealName = selectedMeal?.name?.trim() || "Nom de la recette";
+      const mealVeggy = selectedMeal?.veggy ?? false;
+      const currentItems = selectedRecipe.items;
+
+      if (!selectedMeal || selectedMeal.id === 0) {
+        const res = await sendAPIPOST('meals/', {
+          name: mealName,
+          veggy: mealVeggy,
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to create meal: ${res.status} ${text}`);
+        }
+
+        const createdMeal = await res.json();
+        const newMealId = createdMeal.id;
+
+        const savedIngredientIds = new Set<number>();
+        for (const item of currentItems) {
+          if (item.ingredient.id > 0) {
+            try {
+              const itemRes = await sendAPIPOST(`meals/${newMealId}/ingredients`, {
+                meal_id: newMealId,
+                ingredient_id: item.ingredient.id,
+                quantity: item.quantity,
+              });
+              if (itemRes.ok) {
+                savedIngredientIds.add(item.ingredient.id);
+              }
+            } catch (itemErr) {
+              console.error(`Failed to add ingredient ${item.ingredient.id}`, itemErr);
+            }
+          }
+        }
+
+        setPersistedItemIngredientIds((prev) => ({
+          ...prev,
+          [newMealId]: savedIngredientIds,
+        }));
+
+        setRecipes((prev) => {
+          const filtered = prev.filter((r) => r.meal_id !== 0 && r.meal_id !== newMealId);
+          return [...filtered, { meal_id: newMealId, items: currentItems }];
+        });
+
+        setSelectedMeal({
+          id: newMealId,
+          name: createdMeal.name,
+          veggy: Boolean(createdMeal.veggy),
+          meal_productions: [],
+          recipe_items: [],
+        });
+
+        await loadMeals(newMealId);
+      } else {
+        const mealId = selectedMeal.id;
+        const res = await sendAPIPUT(`meals/${mealId}`, {
+          name: mealName,
+          veggy: mealVeggy,
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to update meal: ${res.status} ${text}`);
+        }
+
+        const persistedSet = persistedItemIngredientIds[mealId] || new Set<number>();
+        const updatedPersistedSet = new Set(persistedSet);
+
+        for (const item of currentItems) {
+          if (item.ingredient.id > 0) {
+            if (persistedSet.has(item.ingredient.id)) {
+              try {
+                await sendAPIPUT(`meals/${mealId}/ingredients/${item.ingredient.id}`, {
+                  quantity: item.quantity,
+                });
+              } catch (itemErr) {
+                console.error(`Failed to update quantity for ingredient ${item.ingredient.id}`, itemErr);
+              }
+            } else {
+              try {
+                const itemRes = await sendAPIPOST(`meals/${mealId}/ingredients`, {
+                  meal_id: mealId,
+                  ingredient_id: item.ingredient.id,
+                  quantity: item.quantity,
+                });
+                if (itemRes.ok) {
+                  updatedPersistedSet.add(item.ingredient.id);
+                }
+              } catch (itemErr) {
+                console.error(`Failed to add ingredient ${item.ingredient.id}`, itemErr);
+              }
+            }
+          }
+        }
+
+        setPersistedItemIngredientIds((prev) => ({
+          ...prev,
+          [mealId]: updatedPersistedSet,
+        }));
+
+        await loadRecipeForMeal(mealId);
+        await loadMeals(mealId);
+      }
+    } catch (err) {
+      console.error('Error saving meal', err);
+      alert('Erreur lors de la sauvegarde de la recette');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <motion.div
@@ -871,59 +1175,54 @@ const RecipeCreatorView = () => {
       exit={{ opacity: 0, y: -20 }}
       className="max-w-6xl mx-auto w-full"
     >
-
       <header className="mb-6">
         <h2 className="text-4xl font-medium tracking-tight">{RECIPES_NAME}</h2>
       </header>
 
-
-      <div className="">
+      <div>
         <section className="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
           <div className="py-2">
             <div className="relative w-full">
               <select
-            value={selectedMeal?.id}
-            onChange={(e) => setSelectedMeal(meals.find((m) => m.id == Number(e.target.value)))}
-            className="w-full appearance-none bg-surface-container-low rounded-lg border-none p-2 px-10 text-center [text-align-last:center] text-4xl font-medium tracking-tight text-on-surface cursor-pointer outline-none focus:ring-0"
-          >
-            <option>Nouvelle recette</option>
-            {recipes.map((recipe) => {
-              const meal = meals.find((m) => m.id === recipe.meal_id);
-              return (
-                <option
-                  key={recipe.meal_id}
-                  value={recipe.meal_id}
-                  className="text-base font-normal text-left"
-                >
-                  {meal ? meal.name : `Recette #${recipe.meal_id}`}
-                </option>
-              );
-            })}
-          </select>
-              <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+                value={selectedMeal?.id ?? 0}
+                onChange={(e) => handleSelectMeal(Number(e.target.value))}
+                className="w-full appearance-none bg-surface-container-low rounded-lg border-none p-2 px-10 text-center [text-align-last:center] text-4xl font-medium tracking-tight text-on-surface cursor-pointer outline-none focus:ring-0"
+              >
+                <option value={0}>Nouvelle recette</option>
+                {meals.map((meal) => (
+                  <option
+                    key={meal.id}
+                    value={meal.id}
+                    className="text-base font-normal text-left"
+                  >
+                    {meal.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
+              />
             </div>
           </div>
           <div className="flex items-center justify-between py-2 gap-4">
             <ClickToEdit
-              initialValue= {selectedMeal?.name ?? "Nom de la recette"}
-              onSave={(newValue) => {
-                console.log("Nouveau nom :", newValue);
-              }}
+              initialValue={selectedMeal?.name ?? "Nom de la recette"}
+              onSave={handleNameChange}
             />
 
             <label className="inline-flex items-center gap-4 cursor-pointer">
               <span className="text-sm font-medium text-on-surface-variant group-hover:text-primary transition-colors">
                 Veggie
               </span>
-              <input 
-                type="checkbox" 
-                checked={meals.find((m) => m.id === selectedMeal?.id)?.veggy ?? false}
-                onChange={(e) => {
-                  //TODO
-                }}
+              <input
+                type="checkbox"
+                checked={selectedMeal?.veggy ?? false}
+                onChange={(e) => handleVeggyToggle(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="relative w-11 h-6 rounded-full peer 
+              <div
+                className="relative w-11 h-6 rounded-full peer 
                   bg-surface-container-high 
                   transition-colors duration-500 ease-in-out
                   peer-checked:bg-primary 
@@ -937,78 +1236,115 @@ const RecipeCreatorView = () => {
                   after:h-4 
                   after:w-4 
                   after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.4,0,0.2,1)]
-                  peer-checked:after:translate-x-5">
-              </div>
+                  peer-checked:after:translate-x-5"
+              ></div>
             </label>
           </div>
 
           <div className="space-y-4">
             <AnimatePresence initial={false}>
               {!selectedRecipe || selectedRecipe.items.length === 0 ? (
-              <p className="text-center text-on-surface-variant py-8">
-                Aucun ingrédient associé à ce plat.
-              </p>
+                <p className="text-center text-on-surface-variant py-8">
+                  Aucun ingrédient associé à ce plat.
+                </p>
               ) : (
-              selectedRecipe.items.map((item) => (
-                <motion.div
-                  key={item.ingredient.id}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="grid grid-cols-7 gap-4 p-4 items-end rounded-lg bg-surface-container-low/50 hover:bg-surface-container-low overflow-hidden"
-                >
-                  <div className="col-span-3">
-                    <label className="block mb-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ingrédient</label>
-                    <div className="relative">
-                      <select
-                        value={item.ingredient.id}
-                        // onChange={(e) => updateArticleProduct(article.id, e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg appearance-none bg-white text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer"
+                selectedRecipe.items.map((item, index) => (
+                  <motion.div
+                    key={`${item.ingredient.id}-${index}`}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="grid grid-cols-7 gap-4 p-4 items-end rounded-lg bg-surface-container-low/50 hover:bg-surface-container-low overflow-hidden"
+                  >
+                    <div className="col-span-3">
+                      <label className="block mb-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        Ingrédient
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={item.ingredient.id}
+                          onChange={(e) =>
+                            handleIngredientChange(index, Number(e.target.value))
+                          }
+                          className="w-full px-4 py-3 rounded-lg appearance-none bg-white text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer"
+                        >
+                          {ingredients.map((ingredient) => (
+                            <option key={ingredient.id} value={ingredient.id}>
+                              {ingredient.name}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={14}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block mb-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        Quantité
+                      </label>
+                      <div className="relative flex items-center">
+                        <input
+                          className="tabular-nums w-full px-4 py-3 pr-16 bg-white rounded-lg text-sm focus:ring-2 focus:ring-primary-light/50"
+                          type="number"
+                          step="any"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            handleQuantityChange(index, isNaN(val) ? 0 : val);
+                          }}
+                        />
+                        <span className="absolute right-4 text-xs font-medium text-on-surface-variant">
+                          {item.ingredient.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="col-span-1 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(index, item)}
+                        className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
+                        title="Supprimer l'ingrédient"
                       >
-                        {ingredients.map((ingredient) => (
-                          <option key={ingredient.id} value={ingredient.id}>
-                            {ingredient.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+                        <Trash2 size={20} />
+                      </button>
                     </div>
-                  </div>
-                  <div className="col-span-3">
-                    <label className="block mb-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Quantité</label>
-                    <div className="relative flex items-center">
-                      <input
-                        className="tabular-nums w-full px-4 py-3 pr-16 bg-white rounded-lg text-sm focus:ring-2 focus:ring-primary-light/50"
-                        type="number"
-                        defaultValue={item.quantity}
-                      />
-                      <span className="absolute right-4 text-xs font-medium text-on-surface-variant">{item.ingredient.unit}</span>
-                    </div>
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    <button
-                      //TODO onClick={() => removeRecipeItem(item.ingredient.id)}
-                      className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </motion.div>
-              )))}
+                  </motion.div>
+                ))
+              )}
             </AnimatePresence>
           </div>
 
-          
           <div className="flex justify-between items-center pt-4">
             <button
-              //TODO onClick={addRecipeItem}
-              className="flex items-center gap-2 text-primary font-semibold text-sm hover:opacity-80"
+              type="button"
+              onClick={addRecipeItem}
+              className="flex items-center gap-2 text-primary font-semibold text-sm hover:opacity-80 transition-opacity"
             >
               <PlusCircle size={16} />
               Ajouter un ingrédient
             </button>
-            <div className="flex gap-4">
-              <button className="px-10 py-3 rounded-lg font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98]">Enregistrer</button>
+            <div className="flex items-center gap-3">
+              {selectedMeal && selectedMeal.id > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteMeal}
+                  className="flex items-center gap-1.5 px-4 py-3 rounded-lg font-semibold text-tertiary bg-tertiary/10 hover:bg-tertiary/20 transition-colors"
+                  title="Supprimer la recette"
+                >
+                  <Trash2 size={18} />
+                  <span>Supprimer</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveMeal}
+                disabled={isSaving}
+                className="px-10 py-3 rounded-lg font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50"
+              >
+                {isSaving ? "Enregistrement..." : "Enregistrer"}
+              </button>
             </div>
           </div>
         </section>
