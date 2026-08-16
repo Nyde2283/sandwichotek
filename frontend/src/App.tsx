@@ -475,7 +475,9 @@ const ShoppingRow: React.FC<{
   onToggleOpen: () => void;
   onDelete: (id: number, e: React.MouseEvent) => void;
   onToggleItem: (listId: number, ingredientId: number, currentBought: boolean) => void;
-}> = ({ list, isOpen, onToggleOpen, onDelete, onToggleItem }) => {
+  onResync: (list: APIShoppingList) => void;
+  isSyncing: boolean;
+}> = ({ list, isOpen, onToggleOpen, onDelete, onToggleItem, onResync, isSyncing }) => {
   const items = list.shopping_items || [];
   const boughtCount = items.filter((i) => i.bought).length;
 
@@ -553,6 +555,25 @@ const ShoppingRow: React.FC<{
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               >
                 <div className="pb-2">
+                  <div className="flex items-center justify-between px-4 py-2 bg-surface-container border-b border-outline-variant/30 rounded-t-lg">
+                    <span className="text-xs font-semibold text-on-surface">
+                      Articles de la liste ({items.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onResync(list);
+                      }}
+                      disabled={isSyncing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Réactualiser la liste selon les plannings de production"
+                    >
+                      <History size={13} className={isSyncing ? "animate-spin" : ""} />
+                      <span>{isSyncing ? "Réactualisation..." : "Réactualiser"}</span>
+                    </button>
+                  </div>
+
                   {items.length === 0 ? (
                     <div className="py-6 text-center text-xs text-on-surface-variant bg-surface-container-lowest rounded-b-lg shadow-custom">
                       Aucun produit dans cette liste de courses.
@@ -577,9 +598,9 @@ const ShoppingRow: React.FC<{
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/50">
-                        {items.map((item) => (
+                        {items.map((item, idx) => (
                           <tr
-                            key={item.ingredient_id}
+                            key={`${item.ingredient_id}-${idx}`}
                             className={`text-xs transition-all ${
                               item.bought
                                 ? 'opacity-40 bg-surface-container-low/30'
@@ -645,16 +666,13 @@ const ShoppingListViewv2 = () => {
   const [rangeBegin, setRangeBegin] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [syncingListId, setSyncingListId] = useState<number | null>(null);
 
-  // Charge toutes les listes de courses depuis l'API
   const loadShoppingLists = async (selectedId?: number) => {
     setIsLoading(true);
     try {
       const res = await sendAPIGET('shopping_lists/');
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to fetch shopping lists: ${res.status} ${text}`);
-      }
+      if (!res.ok) throw new Error(`Failed to fetch shopping lists: ${res.status}`);
 
       const json = await res.json();
       if (!Array.isArray(json)) return;
@@ -686,7 +704,6 @@ const ShoppingListViewv2 = () => {
     }
   };
 
-  // Charge les détails d'une liste (GET /shopping_lists/{id})
   const fetchListDetails = async (listId: number) => {
     try {
       const res = await sendAPIGET(`shopping_lists/${listId}`);
@@ -716,7 +733,6 @@ const ShoppingListViewv2 = () => {
     setShowGenerateModal(true);
   };
 
-  // Déplier / replier une liste et charger ses détails dynamiquement
   const handleToggleExpandList = async (listId: number) => {
     if (expandedListId === listId) {
       setExpandedListId(null);
@@ -726,7 +742,6 @@ const ShoppingListViewv2 = () => {
     await fetchListDetails(listId);
   };
 
-  // Supprimer une liste de courses
   const handleDeleteShoppingList = async (listId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -736,26 +751,14 @@ const ShoppingListViewv2 = () => {
         if (expandedListId === listId) {
           setExpandedListId(null);
         }
-      } else {
-        const errText = await res.text();
-        console.error(`Failed to delete shopping list ${listId}:`, res.status, errText);
-        alert(`Erreur lors de la suppression (${res.status})`);
       }
     } catch (err) {
       console.error(`Error deleting shopping list ${listId}:`, err);
-      alert('Erreur lors de la suppression');
     }
   };
 
-  // Cocher / Décocher un article (synchronisation API PUT)
-  const handleToggleItemBought = async (
-    listId: number,
-    ingredientId: number,
-    currentBought: boolean
-  ) => {
+  const handleToggleItemBought = async (listId: number, ingredientId: number, currentBought: boolean) => {
     const newBought = !currentBought;
-
-    // Mise à jour optimiste locale
     setShoppingLists((prev) =>
       prev.map((l) => {
         if (l.id !== listId || !l.shopping_items) return l;
@@ -773,16 +776,13 @@ const ShoppingListViewv2 = () => {
         bought: newBought,
       });
       if (!res.ok) {
-        // Rollback en cas d'erreur
         setShoppingLists((prev) =>
           prev.map((l) => {
             if (l.id !== listId || !l.shopping_items) return l;
             return {
               ...l,
               shopping_items: l.shopping_items.map((item) =>
-                item.ingredient_id === ingredientId
-                  ? { ...item, bought: currentBought }
-                  : item
+                item.ingredient_id === ingredientId ? { ...item, bought: currentBought } : item
               ),
             };
           })
@@ -793,29 +793,22 @@ const ShoppingListViewv2 = () => {
     }
   };
 
-  // Génération automatique d'une liste de courses à partir des MealProductions
-  const handleGenerateShoppingList = async () => {
-    if (!rangeBegin || !rangeEnd) {
-      alert('Veuillez sélectionner une date de début et une date de fin.');
+  // The core Resync Logic function
+  const handleResyncList = async (list: APIShoppingList) => {
+    if (!list.range_begin || !list.range_end) {
+      alert("Impossible de réactualiser : cette liste n'a pas de période définie.");
       return;
     }
-    if (rangeBegin > rangeEnd) {
-      alert('La date de début doit être antérieure ou égale à la date de fin.');
-      return;
-    }
-
-    setIsGenerating(true);
+    setSyncingListId(list.id);
+    
     try {
-      // a. Récupération des productions planifiées dans la période
-      const prodRes = await sendAPIGET(`meal_productions/?after=${rangeBegin}&before=${rangeEnd}`);
-      if (!prodRes.ok) {
-        const errText = await prodRes.text();
-        throw new Error(`Erreur récupération productions: ${prodRes.status} ${errText}`);
-      }
+      // 1. Fetch updated meal productions
+      const prodRes = await sendAPIGET(`meal_productions/?after=${list.range_begin}&before=${list.range_end}`);
+      if (!prodRes.ok) throw new Error("Erreur lors de la récupération des productions.");
       const productions: any[] = await prodRes.json();
 
-      // b. Récupération des recettes de chaque plat et agrégation des quantités d'ingrédients
-      const aggregatedIngredients: Record<number, number> = {};
+      // 2. Calculate expected totals based on updated schedule
+      const expectedTotals: Record<number, number> = {};
       const mealCache: Record<number, any> = {};
 
       for (const prod of productions) {
@@ -832,13 +825,106 @@ const ShoppingListViewv2 = () => {
             const ingId = rItem.ingredient_id ?? rItem.ingredient?.id;
             if (ingId) {
               const qty = (rItem.quantity ?? 0) * (prod.quantity ?? 0);
+              expectedTotals[ingId] = (expectedTotals[ingId] || 0) + qty;
+            }
+          }
+        }
+      }
+
+      // 3. Compare with current items in the shopping list
+      const detailRes = await sendAPIGET(`shopping_lists/${list.id}`);
+      let currentItems: APIShoppingItem[] = detailRes.ok ? (await detailRes.json()).shopping_items || [] : list.shopping_items || [];
+      const existingItemsByIngId: Record<number, APIShoppingItem> = {};
+      
+      currentItems.forEach((it) => {
+        existingItemsByIngId[it.ingredient_id] = it;
+      });
+
+      for (const [ingIdStr, newTotal] of Object.entries(expectedTotals)) {
+        const ingId = Number(ingIdStr);
+        const existingItem = existingItemsByIngId[ingId];
+
+        if (!existingItem) {
+          // NOT in the list yet -> Create it
+          await sendAPIPOST(`shopping_lists/${list.id}/items`, {
+            shopping_list_id: list.id,
+            ingredient_id: ingId,
+            quantity: newTotal,
+            bought: false,
+          });
+        } else if (!existingItem.bought) {
+          // Exists but UNBOUGHT -> Update strictly to new target quantity
+          if (existingItem.quantity !== newTotal) {
+            await sendAPIPUT(`shopping_lists/${list.id}/items/${ingId}`, {
+              quantity: newTotal,
+            });
+          }
+        } else {
+          // Exists and is BOUGHT -> Keep untouched. Add delta entry if required is higher
+          if (newTotal > existingItem.quantity) {
+            const remainingQty = newTotal - existingItem.quantity;
+            try {
+              await sendAPIPOST(`shopping_lists/${list.id}/items`, {
+                shopping_list_id: list.id,
+                ingredient_id: ingId,
+                quantity: remainingQty,
+                bought: false,
+              });
+            } catch (err) {
+              // Fallback in case unique database constraint prevents duplicate items for identical ingredients
+              console.warn(`Impossible de créer une entrée delta pour l'item ${ingId}, tentative de fallback :`, err);
+            }
+          }
+        }
+      }
+
+      // 4. Refresh List data
+      await fetchListDetails(list.id);
+    } catch (err: any) {
+      console.error('Erreur lors de la synchronisation de la liste:', err);
+      alert(err.message || 'Erreur lors de la réactualisation de la liste');
+    } finally {
+      setSyncingListId(null);
+    }
+  };
+
+  const handleGenerateShoppingList = async () => {
+    if (!rangeBegin || !rangeEnd) {
+      alert('Veuillez sélectionner une date de début et une date de fin.');
+      return;
+    }
+    if (rangeBegin > rangeEnd) {
+      alert('La date de début doit être antérieure ou égale à la date de fin.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const prodRes = await sendAPIGET(`meal_productions/?after=${rangeBegin}&before=${rangeEnd}`);
+      if (!prodRes.ok) throw new Error("Erreur récupération productions");
+      const productions: any[] = await prodRes.json();
+
+      const aggregatedIngredients: Record<number, number> = {};
+      const mealCache: Record<number, any> = {};
+
+      for (const prod of productions) {
+        const mealId = prod.meal_id;
+        if (!mealCache[mealId]) {
+          const mealRes = await sendAPIGET(`meals/${mealId}`);
+          if (mealRes.ok) mealCache[mealId] = await mealRes.json();
+        }
+        const meal = mealCache[mealId];
+        if (meal && Array.isArray(meal.recipe_items)) {
+          for (const rItem of meal.recipe_items) {
+            const ingId = rItem.ingredient_id ?? rItem.ingredient?.id;
+            if (ingId) {
+              const qty = (rItem.quantity ?? 0) * (prod.quantity ?? 0);
               aggregatedIngredients[ingId] = (aggregatedIngredients[ingId] || 0) + qty;
             }
           }
         }
       }
 
-      // c. Création du conteneur de liste de courses via POST /shopping_lists/
       const todayStr = new Date().toISOString().split('T')[0];
       const createListPayload = {
         shopping_date: todayStr,
@@ -847,37 +933,25 @@ const ShoppingListViewv2 = () => {
       };
 
       const createListRes = await sendAPIPOST('shopping_lists/', createListPayload);
-      if (!createListRes.ok) {
-        const errText = await createListRes.text();
-        throw new Error(`Erreur création liste: ${createListRes.status} ${errText}`);
-      }
+      if (!createListRes.ok) throw new Error("Erreur création liste");
+      
       const createdList: APIShoppingList = await createListRes.json();
       const listId = createdList.id;
 
-      // d. Création des articles de courses pour chaque ingrédient agrégé
-      const existingIngredientIds = new Set(
-        Array.isArray(createdList.shopping_items)
-          ? createdList.shopping_items.map((it: any) => it.ingredient_id)
-          : []
-      );
-
       for (const [ingIdStr, totalQty] of Object.entries(aggregatedIngredients)) {
         const ingId = Number(ingIdStr);
-        if (!existingIngredientIds.has(ingId)) {
-          try {
-            await sendAPIPOST(`shopping_lists/${listId}/items`, {
-              shopping_list_id: listId,
-              ingredient_id: ingId,
-              quantity: totalQty,
-              bought: false,
-            });
-          } catch (itemErr) {
-            console.warn(`Item ${ingId} not added:`, itemErr);
-          }
+        try {
+          await sendAPIPOST(`shopping_lists/${listId}/items`, {
+            shopping_list_id: listId,
+            ingredient_id: ingId,
+            quantity: totalQty,
+            bought: false,
+          });
+        } catch (itemErr) {
+          console.warn(`Item ${ingId} not added:`, itemErr);
         }
       }
 
-      // e. Sélection et chargement automatique de la nouvelle liste créée
       setExpandedListId(listId);
       await loadShoppingLists(listId);
       setShowGenerateModal(false);
@@ -956,6 +1030,8 @@ const ShoppingListViewv2 = () => {
                     onToggleOpen={() => handleToggleExpandList(list.id)}
                     onDelete={handleDeleteShoppingList}
                     onToggleItem={handleToggleItemBought}
+                    onResync={handleResyncList}
+                    isSyncing={syncingListId === list.id}
                   />
                 ))
               )}
@@ -1060,7 +1136,6 @@ const ShoppingListViewv2 = () => {
     </motion.div>
   );
 };
-
 
 const ShoppingListView = () => {
   // TODO chargement dynamique de la liste et disponibilité des boutons
@@ -2438,7 +2513,7 @@ const PlanningView = () => {
   const [mealsList, setMealsList] = useState<Meal[]>([]);
   const [productionsByDate, setProductionsByDate] = useState<Record<string, ProdCard[]>>({});
 
-  // 2. Dates calculées pour la semaine
+  // 2. Dates calculées pour la semaine (Lundi à Vendredi)
   const currentWeekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
 
   // 3. Navigation Semaine
@@ -2458,109 +2533,144 @@ const PlanningView = () => {
     });
   };
 
-  // 4. Regroupement des données API
-  const groupProductionsByDate = (mealsFromApi: Meal[]): Record<string, ProdCard[]> => {
-    const grouped: Record<string, ProdCard[]> = {};
+  // 4. Chargement des repas et des productions de la semaine
+  const fetchWeekData = async () => {
+    if (!currentWeekDates || currentWeekDates.length < 5) return;
+    const mondayDate = currentWeekDates[0];
+    const fridayDate = currentWeekDates[4];
 
-    mealsFromApi.forEach((meal) => {
-      meal.meal_productions.forEach((prod) => {
-        if (!grouped[prod.date]) {
-          grouped[prod.date] = [];
-        }
-
-        grouped[prod.date].push({
-          productionId: prod.id,
-          mealId: meal.id,
-          title: meal.name,
-          units: prod.quantity,
-          date: prod.date,
-        });
-      });
-    });
-
-    return grouped;
-  };
-
-  // 5. Chargement API
-  const loadMeals = async () => {
     try {
-      const res = await sendAPIGET('meals/');
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to fetch meals: ${res.status} ${text}`);
+      // a. Récupération de tous les repas pour le dropdown
+      const mealsRes = await sendAPIGET('meals/');
+      let loadedMeals: Meal[] = [];
+      if (mealsRes.ok) {
+        const json = await mealsRes.json();
+        if (Array.isArray(json)) {
+          loadedMeals = json.map((it: any) => ({
+            id: it.id ?? 0,
+            name: it.name ?? '',
+            veggy: Boolean(it.veggy),
+            meal_productions: [],
+            recipe_items: [],
+          }));
+          setMealsList(loadedMeals);
+        }
       }
 
-      const json = await res.json();
-      if (!Array.isArray(json)) return;
+      // b. Récupération des productions planifiées pour la semaine
+      const prodRes = await sendAPIGET(
+        `meal_productions/?after=${mondayDate}&before=${fridayDate}`
+      );
+      if (prodRes.ok) {
+        const productions: any[] = await prodRes.json();
+        const grouped: Record<string, ProdCard[]> = {};
 
-      const mapped: Meal[] = json.map((it: any) => ({
-        id: it.id ?? 0,
-        name: it.name ?? '',
-        veggy: Boolean(it.veggy),
-        meal_productions: Array.isArray(it.meal_productions)
-          ? it.meal_productions.map((prod: any): MealProduction => ({
-              id: prod.id ?? 0,
-              meal_id: prod.meal_id ?? it.id ?? 0,
-              date: prod.date ?? '',
-              quantity: prod.quantity ?? 0,
-            }))
-          : [],
-        recipe_items: Array.isArray(it.recipe_items)
-          ? it.recipe_items.map((item: any): RecipeItem => ({
-              ingredient: {
-                id: item.ingredient?.id ?? item.ingredient_id ?? 0,
-                name: item.ingredient?.name ?? '',
-                note: item.ingredient?.note ?? '',
-                brand: item.ingredient?.brand ?? 0,
-                shelf: item.ingredient?.shelf ?? 0,
-                unit: item.ingredient?.unit ?? '',
-              },
-              quantity: item.quantity ?? 0,
-            }))
-          : [],
-      }));
+        currentWeekDates.forEach((d) => {
+          grouped[d] = [];
+        });
 
-      setMealsList(mapped);
-      setProductionsByDate(groupProductionsByDate(mapped));
+        if (Array.isArray(productions)) {
+          productions.forEach((prod: any) => {
+            const d = prod.date;
+            if (!grouped[d]) {
+              grouped[d] = [];
+            }
+            const matchingMeal = loadedMeals.find((m) => m.id === prod.meal_id);
+            grouped[d].push({
+              productionId: prod.id,
+              mealId: prod.meal_id,
+              title: prod.meal?.name || matchingMeal?.name || '',
+              units: prod.quantity ?? 0,
+              date: prod.date,
+            });
+          });
+        }
+
+        setProductionsByDate(grouped);
+      }
     } catch (err) {
-      console.error('Error loading meals', err);
+      console.error('Error fetching week data:', err);
     }
   };
 
   useEffect(() => {
-    loadMeals();
-  }, []);
+    fetchWeekData();
+  }, [currentWeekDates]);
 
-  // 6. Interactions (Ajout / Changement de Plat / Supprimer)
-  const addCard = (dateStr: string) => {
+  // 5. Création d'une Meal Production (addCard)
+  const addCard = async (dateStr: string) => {
+    if (mealsList.length === 0) {
+      alert("Aucun plat disponible. Créez d'abord des recettes dans l'onglet Recettes.");
+      return;
+    }
     const defaultMeal = mealsList[0];
-    if (!defaultMeal) return;
-
-    const newCard: ProdCard = {
-      productionId: Date.now(), // Temporaire en local avant sync API
-      mealId: defaultMeal.id,
-      title: defaultMeal.name,
-      units: 10,
+    const payload = {
+      meal_id: defaultMeal.id,
       date: dateStr,
+      quantity: 10,
     };
 
-    setProductionsByDate((prev) => ({
-      ...prev,
-      [dateStr]: [...(prev[dateStr] || []), newCard],
-    }));
+    try {
+      const res = await sendAPIPOST('meal_productions/', payload);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to create meal production: ${res.status} ${text}`);
+      }
+
+      const createdProd = await res.json();
+      const newCard: ProdCard = {
+        productionId: createdProd.id,
+        mealId: createdProd.meal_id,
+        title: createdProd.meal?.name || defaultMeal.name,
+        units: createdProd.quantity,
+        date: createdProd.date,
+      };
+
+      setProductionsByDate((prev) => ({
+        ...prev,
+        [dateStr]: [...(prev[dateStr] || []), newCard],
+      }));
+    } catch (err) {
+      console.error('Error creating meal production:', err);
+      alert('Erreur lors de la création de la production');
+    }
   };
 
-  const removeMeal = (dateStr: string, productionId: number) => {
+  // 6. Suppression d'une Meal Production (removeMeal)
+  const removeMeal = async (dateStr: string, productionId: number) => {
+    // Mise à jour optimiste
     setProductionsByDate((prev) => ({
       ...prev,
-      [dateStr]: (prev[dateStr] || []).filter((card) => card.productionId !== productionId),
+      [dateStr]: (prev[dateStr] || []).filter(
+        (card) => card.productionId !== productionId
+      ),
     }));
+
+    try {
+      const res = await sendAPIDELETE(`meal_productions/${productionId}`);
+      if (!res.ok && res.status !== 204) {
+        const text = await res.text();
+        console.error(`Failed to delete meal production ${productionId}:`, res.status, text);
+        alert(`Erreur lors de la suppression (${res.status})`);
+        fetchWeekData();
+      }
+    } catch (err) {
+      console.error(`Error deleting meal production ${productionId}:`, err);
+      alert('Erreur lors de la suppression');
+      fetchWeekData();
+    }
   };
 
-  const handleMealChange = (dateStr: string, productionId: number, newMealId: number) => {
+  // 7. Modification du Plat (handleMealChange)
+  const handleMealChange = async (
+    dateStr: string,
+    productionId: number,
+    newMealId: number
+  ) => {
     const targetMeal = mealsList.find((m) => m.id === newMealId);
     if (!targetMeal) return;
 
+    // Mise à jour optimiste
     setProductionsByDate((prev) => ({
       ...prev,
       [dateStr]: (prev[dateStr] || []).map((card) =>
@@ -2569,15 +2679,49 @@ const PlanningView = () => {
           : card
       ),
     }));
+
+    try {
+      const res = await sendAPIPUT(`meal_productions/${productionId}`, {
+        meal_id: newMealId,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`Failed to update meal production ${productionId}:`, res.status, text);
+        fetchWeekData();
+      }
+    } catch (err) {
+      console.error(`Error updating meal production ${productionId}:`, err);
+      fetchWeekData();
+    }
   };
 
-  const handleQuantityChange = (dateStr: string, productionId: number, newQty: number) => {
+  // 8. Modification de la Quantité (handleQuantityChange)
+  const handleQuantityChange = async (
+    dateStr: string,
+    productionId: number,
+    newQty: number
+  ) => {
+    // Mise à jour optimiste
     setProductionsByDate((prev) => ({
       ...prev,
       [dateStr]: (prev[dateStr] || []).map((card) =>
         card.productionId === productionId ? { ...card, units: newQty } : card
       ),
     }));
+
+    try {
+      const res = await sendAPIPUT(`meal_productions/${productionId}`, {
+        quantity: newQty,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`Failed to update quantity for production ${productionId}:`, res.status, text);
+        fetchWeekData();
+      }
+    } catch (err) {
+      console.error(`Error updating quantity for production ${productionId}:`, err);
+      fetchWeekData();
+    }
   };
 
   return (
@@ -2596,6 +2740,7 @@ const PlanningView = () => {
         </div>
         <div className="flex items-center bg-surface-container-low p-1 rounded-lg">
           <button
+            type="button"
             onClick={handlePreviousWeek}
             className="p-2 hover:bg-surface-container rounded transition-colors"
           >
@@ -2607,6 +2752,7 @@ const PlanningView = () => {
             </span>
           </div>
           <button
+            type="button"
             onClick={handleNextWeek}
             className="p-2 hover:bg-surface-container rounded transition-colors"
           >
@@ -2687,7 +2833,8 @@ const PlanningView = () => {
 
                         <div className="flex justify-center min-[180px]:justify-end">
                           <button
-                            className="p-2 text-tertiary/40 hover:text-tertiary hover:bg-tertiary/5 rounded-full transition-all shrink-0"
+                            type="button"
+                            className="p-2 text-tertiary/40 hover:text-tertiary hover:bg-tertiary/5 rounded-full transition-all shrink-0 cursor-pointer"
                             onClick={() => removeMeal(dateStr, card.productionId)}
                             title="Supprimer"
                           >
@@ -2703,6 +2850,7 @@ const PlanningView = () => {
               {/* Bouton Ajouter */}
               <div className="py-0">
                 <button
+                  type="button"
                   onClick={() => addCard(dateStr)}
                   className="w-full bg-surface-container-lowest p-4 rounded-xl border-dashed border-2 border-outline-variant/30 flex flex-col items-center justify-center hover:border-primary/50 transition-colors group cursor-pointer"
                 >
