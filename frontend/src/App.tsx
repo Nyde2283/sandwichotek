@@ -446,25 +446,43 @@ const TopBar = ({ title }: { title: string }) => {
   );
 };
 
-const ShoppingRow: React.FC<{ list: ShoppingList }> = ({ list }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const [items, setItems] = useState(list.items);
-
-  const toggleItem = (index: number) => {
-    const newItems = [...items];
-    newItems[index] = { 
-      ...newItems[index], 
-      taken: !newItems[index].taken 
-    };
-    setItems(newItems);
+interface APIShoppingItem {
+  shopping_list_id: number;
+  ingredient_id: number;
+  quantity: number;
+  bought: boolean;
+  ingredient?: {
+    id: number;
+    name: string;
+    unit: string;
+    remark?: string;
+    shelf?: { id: number; name: string };
+    brand?: { id: number; name: string };
   };
+}
+
+interface APIShoppingList {
+  id: number;
+  shopping_date: string;
+  range_begin: string;
+  range_end: string;
+  shopping_items?: APIShoppingItem[];
+}
+
+const ShoppingRow: React.FC<{
+  list: APIShoppingList;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onDelete: (id: number, e: React.MouseEvent) => void;
+  onToggleItem: (listId: number, ingredientId: number, currentBought: boolean) => void;
+}> = ({ list, isOpen, onToggleOpen, onDelete, onToggleItem }) => {
+  const items = list.shopping_items || [];
+  const boughtCount = items.filter((i) => i.bought).length;
 
   return (
     <>
-    {/* </>div className="w-full py-2"> */}
-      <tr 
-        onClick={() => setIsOpen(!isOpen)} 
+      <tr
+        onClick={onToggleOpen}
         className="hover:bg-surface-container-low transition-colors group cursor-pointer border-b border-outline-variant/50"
       >
         <td className="px-6 py-4">
@@ -475,13 +493,26 @@ const ShoppingRow: React.FC<{ list: ShoppingList }> = ({ list }) => {
             >
               <ChevronRight size={18} />
             </motion.div>
-            <span className="font-medium text-sm text-on-surface">
-              {new Date(list.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-            </span>
+            <div className="flex flex-col">
+              <span className="font-medium text-sm text-on-surface">
+                {list.shopping_date
+                  ? new Date(list.shopping_date).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })
+                  : '—'}
+              </span>
+              {(list.range_begin || list.range_end) && (
+                <span className="text-[10px] text-on-surface-variant/70">
+                  Période : {list.range_begin ? new Date(list.range_begin).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''} - {list.range_end ? new Date(list.range_end).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''}
+                </span>
+              )}
+            </div>
           </div>
         </td>
         <td className="px-6 text-sm font-mono text-primary/80">
-          #{list.id.slice(-6).toUpperCase()}
+          #SL-{String(list.id).padStart(4, '0')}
         </td>
         <td className="px-6 text-right">
           <span className="text-sm text-on-surface-variant tabular-nums">
@@ -489,71 +520,113 @@ const ShoppingRow: React.FC<{ list: ShoppingList }> = ({ list }) => {
           </span>
         </td>
         <td className="px-6 text-right">
-          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${
-            items.every(i => i.taken) ? 'bg-green-500/10 text-green-600' : 'bg-primary/10 text-primary'
-          }`}>
-            {items.filter(i => i.taken).length} / {items.length} PRIS
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${
+              items.length > 0 && items.every((i) => i.bought)
+                ? 'bg-green-500/10 text-green-600'
+                : 'bg-primary/10 text-primary'
+            }`}
+          >
+            {boughtCount} / {items.length} PRIS
           </span>
         </td>
+        <td className="px-6 text-right">
+          <button
+            type="button"
+            onClick={(e) => onDelete(list.id, e)}
+            className="p-2 text-tertiary/40 hover:text-tertiary hover:bg-tertiary/10 rounded-lg transition-colors"
+            title="Supprimer la liste"
+          >
+            <Trash2 size={16} />
+          </button>
+        </td>
       </tr>
-      
+
       <AnimatePresence>
         {isOpen && (
-          <tr key="details">
-            <td colSpan={4} className="p-0 bg-surface-container-low/20">
+          <tr key={`details-${list.id}`}>
+            <td colSpan={5} className="p-0 bg-surface-container-low/20">
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
+                animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                className=""
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
               >
                 <div className="pb-2">
-                  <table className="w-full text-left border-collapse bg-surface-container-lowest rounded-b-lg shadow-custom">
-                    <thead>
-                      <tr className="border-b border-outline-variant">
-                        <th className="w-10 px-4 py-2"></th>
-                        <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">Article</th>
-                        <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">Marque</th>
-                        <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70 text-right">Quantité</th>
-                        <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">Rayon</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/50">
-                      {items.map((item, idx) => (
-                        <tr 
-                          key={idx} 
-                          className={`text-xs transition-all ${item.taken ? 'opacity-40 bg-surface-container-low/30' : 'opacity-100'}`}
-                        >
-                          <td className="px-4 py-2.5 text-center">
-                            <input 
-                              type="checkbox" 
-                              checked={item.taken}
-                              onChange={() => toggleItem(idx)}
-                              onClick={(e) => e.stopPropagation()} 
-                              className="w-4 h-4 rounded border-outline-variant text-primary accent-primary cursor-pointer"
-                            />
-                          </td>
-                          
-                          <td className={`px-4 py-2.5 font-medium transition-all ${item.taken ? 'line-through text-on-surface-variant' : 'text-on-surface'}`}>
-                            {item.name}
-                          </td>
-                          
-                          <td className="px-4 py-2.5 text-on-surface-variant/80 italic">
-                            {item.brand || "—"}
-                          </td>
-                          
-                          <td className="px-4 py-2.5 text-right tabular-nums text-on-surface font-medium">
-                            {item.quantity} <span className="text-[10px] text-on-surface-variant font-normal">{item.unit}</span>
-                          </td>
-                          
-                          <td className="px-4 py-2.5 text-[10px] text-on-surface-variant/80 uppercase tracking-tight">
-                            {item.shelf}
-                          </td>
+                  {items.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-on-surface-variant bg-surface-container-lowest rounded-b-lg shadow-custom">
+                      Aucun produit dans cette liste de courses.
+                    </div>
+                  ) : (
+                    <table className="w-full text-left border-collapse bg-surface-container-lowest rounded-b-lg shadow-custom">
+                      <thead>
+                        <tr className="border-b border-outline-variant">
+                          <th className="w-10 px-4 py-2"></th>
+                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
+                            Article
+                          </th>
+                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
+                            Marque
+                          </th>
+                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70 text-right">
+                            Quantité
+                          </th>
+                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
+                            Rayon
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant/50">
+                        {items.map((item) => (
+                          <tr
+                            key={item.ingredient_id}
+                            className={`text-xs transition-all ${
+                              item.bought
+                                ? 'opacity-40 bg-surface-container-low/30'
+                                : 'opacity-100'
+                            }`}
+                          >
+                            <td className="px-4 py-2.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={item.bought}
+                                onChange={() =>
+                                  onToggleItem(list.id, item.ingredient_id, item.bought)
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 rounded border-outline-variant text-primary accent-primary cursor-pointer"
+                              />
+                            </td>
+
+                            <td
+                              className={`px-4 py-2.5 font-medium transition-all ${
+                                item.bought
+                                  ? 'line-through text-on-surface-variant'
+                                  : 'text-on-surface'
+                              }`}
+                            >
+                              {item.ingredient?.name || `Ingrédient #${item.ingredient_id}`}
+                            </td>
+
+                            <td className="px-4 py-2.5 text-on-surface-variant/80 italic">
+                              {item.ingredient?.brand?.name || '—'}
+                            </td>
+
+                            <td className="px-4 py-2.5 text-right tabular-nums text-on-surface font-medium">
+                              {item.quantity}{' '}
+                              <span className="text-[10px] text-on-surface-variant font-normal">
+                                {item.ingredient?.unit || ''}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-2.5 text-[10px] text-on-surface-variant/80 uppercase tracking-tight">
+                              {item.ingredient?.shelf?.name || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </motion.div>
             </td>
@@ -565,9 +638,256 @@ const ShoppingRow: React.FC<{ list: ShoppingList }> = ({ list }) => {
 };
 
 const ShoppingListViewv2 = () => {
-  const sortedData = [...SHOPPING_DATA].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  const [shoppingLists, setShoppingLists] = useState<APIShoppingList[]>([]);
+  const [expandedListId, setExpandedListId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [rangeBegin, setRangeBegin] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Charge toutes les listes de courses depuis l'API
+  const loadShoppingLists = async (selectedId?: number) => {
+    setIsLoading(true);
+    try {
+      const res = await sendAPIGET('shopping_lists/');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch shopping lists: ${res.status} ${text}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
+
+      const mapped: APIShoppingList[] = json.map((it: any) => ({
+        id: it.id ?? 0,
+        shopping_date: it.shopping_date ?? '',
+        range_begin: it.range_begin ?? '',
+        range_end: it.range_end ?? '',
+        shopping_items: it.shopping_items ?? [],
+      }));
+
+      mapped.sort((a, b) => {
+        const diff = new Date(b.shopping_date).getTime() - new Date(a.shopping_date).getTime();
+        if (diff !== 0) return diff;
+        return b.id - a.id;
+      });
+
+      setShoppingLists(mapped);
+
+      const targetId = selectedId !== undefined ? selectedId : expandedListId;
+      if (targetId !== null && mapped.some((l) => l.id === targetId)) {
+        await fetchListDetails(targetId);
+      }
+    } catch (err) {
+      console.error('Error loading shopping lists:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Charge les détails d'une liste (GET /shopping_lists/{id})
+  const fetchListDetails = async (listId: number) => {
+    try {
+      const res = await sendAPIGET(`shopping_lists/${listId}`);
+      if (!res.ok) return;
+      const data: APIShoppingList = await res.json();
+      setShoppingLists((prev) =>
+        prev.map((l) => (l.id === listId ? { ...l, ...data } : l))
+      );
+    } catch (err) {
+      console.error(`Error fetching shopping list details ${listId}:`, err);
+    }
+  };
+
+  useEffect(() => {
+    loadShoppingLists();
+  }, []);
+
+  const handleOpenGenerateModal = () => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 6);
+    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+
+    setRangeBegin(todayStr);
+    setRangeEnd(nextWeekStr);
+    setShowGenerateModal(true);
+  };
+
+  // Déplier / replier une liste et charger ses détails dynamiquement
+  const handleToggleExpandList = async (listId: number) => {
+    if (expandedListId === listId) {
+      setExpandedListId(null);
+      return;
+    }
+    setExpandedListId(listId);
+    await fetchListDetails(listId);
+  };
+
+  // Supprimer une liste de courses
+  const handleDeleteShoppingList = async (listId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await sendAPIDELETE(`shopping_lists/${listId}`);
+      if (res.ok || res.status === 204) {
+        setShoppingLists((prev) => prev.filter((l) => l.id !== listId));
+        if (expandedListId === listId) {
+          setExpandedListId(null);
+        }
+      } else {
+        const errText = await res.text();
+        console.error(`Failed to delete shopping list ${listId}:`, res.status, errText);
+        alert(`Erreur lors de la suppression (${res.status})`);
+      }
+    } catch (err) {
+      console.error(`Error deleting shopping list ${listId}:`, err);
+      alert('Erreur lors de la suppression');
+    }
+  };
+
+  // Cocher / Décocher un article (synchronisation API PUT)
+  const handleToggleItemBought = async (
+    listId: number,
+    ingredientId: number,
+    currentBought: boolean
+  ) => {
+    const newBought = !currentBought;
+
+    // Mise à jour optimiste locale
+    setShoppingLists((prev) =>
+      prev.map((l) => {
+        if (l.id !== listId || !l.shopping_items) return l;
+        return {
+          ...l,
+          shopping_items: l.shopping_items.map((item) =>
+            item.ingredient_id === ingredientId ? { ...item, bought: newBought } : item
+          ),
+        };
+      })
+    );
+
+    try {
+      const res = await sendAPIPUT(`shopping_lists/${listId}/items/${ingredientId}`, {
+        bought: newBought,
+      });
+      if (!res.ok) {
+        // Rollback en cas d'erreur
+        setShoppingLists((prev) =>
+          prev.map((l) => {
+            if (l.id !== listId || !l.shopping_items) return l;
+            return {
+              ...l,
+              shopping_items: l.shopping_items.map((item) =>
+                item.ingredient_id === ingredientId
+                  ? { ...item, bought: currentBought }
+                  : item
+              ),
+            };
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Error updating item bought state:', err);
+    }
+  };
+
+  // Génération automatique d'une liste de courses à partir des MealProductions
+  const handleGenerateShoppingList = async () => {
+    if (!rangeBegin || !rangeEnd) {
+      alert('Veuillez sélectionner une date de début et une date de fin.');
+      return;
+    }
+    if (rangeBegin > rangeEnd) {
+      alert('La date de début doit être antérieure ou égale à la date de fin.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      // a. Récupération des productions planifiées dans la période
+      const prodRes = await sendAPIGET(`meal_productions/?after=${rangeBegin}&before=${rangeEnd}`);
+      if (!prodRes.ok) {
+        const errText = await prodRes.text();
+        throw new Error(`Erreur récupération productions: ${prodRes.status} ${errText}`);
+      }
+      const productions: any[] = await prodRes.json();
+
+      // b. Récupération des recettes de chaque plat et agrégation des quantités d'ingrédients
+      const aggregatedIngredients: Record<number, number> = {};
+      const mealCache: Record<number, any> = {};
+
+      for (const prod of productions) {
+        const mealId = prod.meal_id;
+        if (!mealCache[mealId]) {
+          const mealRes = await sendAPIGET(`meals/${mealId}`);
+          if (mealRes.ok) {
+            mealCache[mealId] = await mealRes.json();
+          }
+        }
+        const meal = mealCache[mealId];
+        if (meal && Array.isArray(meal.recipe_items)) {
+          for (const rItem of meal.recipe_items) {
+            const ingId = rItem.ingredient_id ?? rItem.ingredient?.id;
+            if (ingId) {
+              const qty = (rItem.quantity ?? 0) * (prod.quantity ?? 0);
+              aggregatedIngredients[ingId] = (aggregatedIngredients[ingId] || 0) + qty;
+            }
+          }
+        }
+      }
+
+      // c. Création du conteneur de liste de courses via POST /shopping_lists/
+      const todayStr = new Date().toISOString().split('T')[0];
+      const createListPayload = {
+        shopping_date: todayStr,
+        range_begin: rangeBegin,
+        range_end: rangeEnd,
+      };
+
+      const createListRes = await sendAPIPOST('shopping_lists/', createListPayload);
+      if (!createListRes.ok) {
+        const errText = await createListRes.text();
+        throw new Error(`Erreur création liste: ${createListRes.status} ${errText}`);
+      }
+      const createdList: APIShoppingList = await createListRes.json();
+      const listId = createdList.id;
+
+      // d. Création des articles de courses pour chaque ingrédient agrégé
+      const existingIngredientIds = new Set(
+        Array.isArray(createdList.shopping_items)
+          ? createdList.shopping_items.map((it: any) => it.ingredient_id)
+          : []
+      );
+
+      for (const [ingIdStr, totalQty] of Object.entries(aggregatedIngredients)) {
+        const ingId = Number(ingIdStr);
+        if (!existingIngredientIds.has(ingId)) {
+          try {
+            await sendAPIPOST(`shopping_lists/${listId}/items`, {
+              shopping_list_id: listId,
+              ingredient_id: ingId,
+              quantity: totalQty,
+              bought: false,
+            });
+          } catch (itemErr) {
+            console.warn(`Item ${ingId} not added:`, itemErr);
+          }
+        }
+      }
+
+      // e. Sélection et chargement automatique de la nouvelle liste créée
+      setExpandedListId(listId);
+      await loadShoppingLists(listId);
+      setShowGenerateModal(false);
+    } catch (err: any) {
+      console.error('Error generating shopping list:', err);
+      alert(err.message || 'Erreur lors de la génération de la liste de courses');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <motion.div
@@ -579,47 +899,164 @@ const ShoppingListViewv2 = () => {
       <header className="mb-6">
         <h2 className="text-4xl font-medium tracking-tight">{SHOPPING_LIST_NAME}</h2>
       </header>
+
       <section className="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
-      <div className="w-full mb-4 border-b border-outline-variant/10 flex items-center justify-between">
-        <h3 className="font-semibold text-on-surface text-lg">Historique des courses</h3>
-        <span className="text-xs text-on-surface-variant font-medium bg-surface-container-high px-2 py-1 rounded">
-          {sortedData.length} listes au total
-        </span>
-      </div>
-
-      {/* Table */}
-      <div className="rounded-t-lg bg-surface-container-high border-outline-variant/50">
-        <table className="w-full table-auto md:table-fixed">
-          <thead>
-            <tr className="border-b border-outline-variant">
-              <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-left">Date de la liste</th>
-              <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-left">Référence</th>
-              <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-right">Volume</th>
-              <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-right">Statut</th>
-            </tr>
-          </thead>
-          <tbody className="bg-surface-container-low">
-            {sortedData.map((list) => (
-              <ShoppingRow key={list.id} list={list} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Footer / Pagination */}
-      <div className="px-6 py-6 bg-surface-container-high flex items-center justify-between rounded-b-lg border-outline-variant/50">
-        {/* <button className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-30">
-          Précédent
-        </button>
-        <div className="flex gap-2">
-          <span className="w-7 h-7 flex items-center justify-center bg-primary text-on-primary text-[10px] font-bold rounded-full shadow-sm">1</span>
-          <span className="w-7 h-7 flex items-center justify-center text-on-surface-variant text-[10px] font-bold hover:bg-surface-container-high rounded-full cursor-pointer transition-all">2</span>
+        <div className="w-full mb-4 pb-3 border-b border-outline-variant/10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold text-on-surface text-lg">Historique des courses</h3>
+            <span className="text-xs text-on-surface-variant font-medium bg-surface-container-high px-2.5 py-1 rounded-full">
+              {shoppingLists.length} listes au total
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenGenerateModal}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white signature-gradient shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform cursor-pointer"
+          >
+            <PlusCircle size={16} />
+            <span>Générer une liste</span>
+          </button>
         </div>
-        <button className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
-          Suivant
-        </button> */}
-      </div>
+
+        {/* Table */}
+        <div className="rounded-t-lg bg-surface-container-high border-outline-variant/50 overflow-hidden">
+          <table className="w-full table-auto md:table-fixed">
+            <thead>
+              <tr className="border-b border-outline-variant">
+                <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-left">
+                  Date de la liste
+                </th>
+                <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-left">
+                  Référence
+                </th>
+                <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-right">
+                  Volume
+                </th>
+                <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-right">
+                  Statut
+                </th>
+                <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-right w-20">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-surface-container-low">
+              {shoppingLists.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-on-surface-variant text-sm">
+                    {isLoading ? 'Chargement des listes de courses...' : 'Aucune liste de courses générée pour le moment.'}
+                  </td>
+                </tr>
+              ) : (
+                shoppingLists.map((list) => (
+                  <ShoppingRow
+                    key={list.id}
+                    list={list}
+                    isOpen={expandedListId === list.id}
+                    onToggleOpen={() => handleToggleExpandList(list.id)}
+                    onDelete={handleDeleteShoppingList}
+                    onToggleItem={handleToggleItemBought}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between rounded-b-lg border-outline-variant/50 text-xs text-on-surface-variant">
+          <span>Cliquez sur une ligne pour afficher ou masquer le détail des articles.</span>
+        </div>
       </section>
+
+      {/* Modal Génération de liste */}
+      <AnimatePresence>
+        {showGenerateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-md shadow-2xl border border-outline-variant/30 space-y-5"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                    <Calendar size={20} />
+                  </div>
+                  <h3 className="font-bold text-lg text-on-surface">Générer une liste</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGenerateModal(false)}
+                  className="p-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Sélectionnez la période des plannings de production pour agréger automatiquement tous les ingrédients nécessaires.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Date de début
+                  </label>
+                  <input
+                    type="date"
+                    value={rangeBegin}
+                    onChange={(e) => setRangeBegin(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-surface-container-low rounded-lg text-sm text-on-surface border border-outline-variant/50 focus:ring-2 focus:ring-primary-light/50 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Date de fin
+                  </label>
+                  <input
+                    type="date"
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-surface-container-low rounded-lg text-sm text-on-surface border border-outline-variant/50 focus:ring-2 focus:ring-primary-light/50 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGenerateModal(false)}
+                  disabled={isGenerating}
+                  className="px-5 py-2.5 rounded-lg text-sm font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateShoppingList}
+                  disabled={isGenerating || !rangeBegin || !rangeEnd}
+                  className="px-6 py-2.5 rounded-lg text-sm font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Génération...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle size={16} />
+                      <span>Générer</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
