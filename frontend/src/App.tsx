@@ -472,9 +472,17 @@ interface APIShoppingItem {
   };
 }
 
+const getTodayDateString = (): string => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface APIShoppingList {
   id: number;
-  shopping_date: string;
+  shopping_date: string; // Date des courses prévues (plannedDate)
   range_begin: string;
   range_end: string;
   shopping_items?: APIShoppingItem[];
@@ -541,6 +549,7 @@ const ShoppingRow: React.FC<{
   onDelete: (id: number, e: React.MouseEvent) => void;
   onToggleItem: (listId: number, ingredientId: number, currentBought: boolean) => void;
   onUpdateQuantity: (listId: number, ingredientId: number, newQuantity: number) => void;
+  onUpdatePlannedDate?: (listId: number, newDate: string) => Promise<void>;
   onAddItem: (payload: {
     shopping_list_id: number;
     ingredient_id: number;
@@ -557,6 +566,7 @@ const ShoppingRow: React.FC<{
   onDelete,
   onToggleItem,
   onUpdateQuantity,
+  onUpdatePlannedDate,
   onAddItem,
   onResync,
   isSyncing,
@@ -565,9 +575,30 @@ const ShoppingRow: React.FC<{
   const items = list.shopping_items || [];
   const boughtCount = items.filter((i) => i.bought).length;
 
+  const todayStr = getTodayDateString();
+  const isToday = Boolean(list.shopping_date && list.shopping_date === todayStr);
+  const isCollapsed = !isOpen;
+  const isCompleted = items.length > 0 && items.every((i) => i.bought);
+  const isPast = Boolean(list.shopping_date && list.shopping_date < todayStr);
+  const isDimmed = isPast || isCompleted;
+  const isHighlightToday = isToday && isCollapsed && !isDimmed;
+
   const [selectedIngredientId, setSelectedIngredientId] = useState<number | ''>('');
   const [newQuantity, setNewQuantity] = useState<string>('1');
   const [isAdding, setIsAdding] = useState(false);
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [editDateVal, setEditDateVal] = useState(list.shopping_date || '');
+
+  useEffect(() => {
+    setEditDateVal(list.shopping_date || '');
+  }, [list.shopping_date]);
+
+  const handleSaveDate = async () => {
+    setIsEditingDate(false);
+    if (editDateVal && editDateVal !== list.shopping_date && onUpdatePlannedDate) {
+      await onUpdatePlannedDate(list.id, editDateVal);
+    }
+  };
 
   const selectedIngredient = availableIngredients.find(
     (i) => i.id === Number(selectedIngredientId)
@@ -606,7 +637,13 @@ const ShoppingRow: React.FC<{
     <>
       <tr
         onClick={onToggleOpen}
-        className="hover:bg-surface-container-low transition-colors group cursor-pointer border-b border-outline-variant/50"
+        className={`transition-all group cursor-pointer border-b border-outline-variant/50 ${
+          isHighlightToday
+            ? 'bg-primary/10 hover:bg-primary/15 border-l-4 border-l-primary shadow-xs'
+            : isDimmed
+            ? 'opacity-60 hover:opacity-90 bg-surface-container-lowest/40'
+            : 'hover:bg-surface-container-low'
+        }`}
       >
         <td className="px-6 py-4">
           <div className="gap-4 flex items-center justify-left">
@@ -617,15 +654,90 @@ const ShoppingRow: React.FC<{
               <ChevronRight size={18} />
             </motion.div>
             <div className="flex flex-col">
-              <span className="font-medium text-sm text-on-surface">
-                {list.shopping_date
-                  ? new Date(list.shopping_date).toLocaleDateString('fr-FR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                    })
-                  : '—'}
-              </span>
+              {isEditingDate ? (
+                <div
+                  className="flex items-center gap-1.5 py-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="date"
+                    value={editDateVal}
+                    onChange={(e) => setEditDateVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveDate();
+                      if (e.key === 'Escape') {
+                        setEditDateVal(list.shopping_date || '');
+                        setIsEditingDate(false);
+                      }
+                    }}
+                    onBlur={handleSaveDate}
+                    autoFocus
+                    className="px-2 py-1 bg-surface border border-primary rounded text-xs text-on-surface outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveDate}
+                    className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
+                    title="Enregistrer la date prévisionnelle"
+                  >
+                    <Save size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditDateVal(list.shopping_date || '');
+                      setIsEditingDate(false);
+                    }}
+                    className="p-1 text-on-surface-variant hover:bg-surface-container-high rounded transition-colors"
+                    title="Annuler"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group/date">
+                  <span
+                    className={`font-medium text-sm ${
+                      isHighlightToday
+                        ? 'text-primary font-bold'
+                        : isDimmed
+                        ? 'text-on-surface-variant'
+                        : 'text-on-surface'
+                    }`}
+                  >
+                    {list.shopping_date
+                      ? new Date(list.shopping_date).toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                        })
+                      : '—'}
+                  </span>
+                  {isHighlightToday && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary text-white shadow-xs">
+                      Aujourd'hui
+                    </span>
+                  )}
+                  {isPast && !isCompleted && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-surface-container text-on-surface-variant/70">
+                      Passée
+                    </span>
+                  )}
+                  {onUpdatePlannedDate && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsEditingDate(true);
+                      }}
+                      className="opacity-0 group-hover/date:opacity-100 p-1 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded transition-all"
+                      title="Modifier la date des courses prévues"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
               {(list.range_begin || list.range_end) && (
                 <span className="text-[10px] text-on-surface-variant/70">
                   Période : {list.range_begin ? new Date(list.range_begin).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''} - {list.range_end ? new Date(list.range_end).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''}
@@ -634,7 +746,7 @@ const ShoppingRow: React.FC<{
             </div>
           </div>
         </td>
-        <td className="px-6 text-sm font-mono text-primary/80">
+        <td className={`px-6 text-sm font-mono ${isHighlightToday ? 'text-primary font-bold' : 'text-primary/80'}`}>
           #SL-{String(list.id).padStart(4, '0')}
         </td>
         <td className="px-6 text-right">
@@ -645,12 +757,16 @@ const ShoppingRow: React.FC<{
         <td className="px-6 text-right">
           <span
             className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${
-              items.length > 0 && items.every((i) => i.bought)
+              isCompleted
                 ? 'bg-green-500/10 text-green-600'
+                : isHighlightToday
+                ? 'bg-primary text-white'
+                : isDimmed
+                ? 'bg-surface-container-high text-on-surface-variant/70'
                 : 'bg-primary/10 text-primary'
             }`}
           >
-            {boughtCount} / {items.length} PRIS
+            {boughtCount} / {items.length} PRIS {isCompleted ? '✓' : ''}
           </span>
         </td>
         <td className="px-6 text-right">
@@ -842,8 +958,10 @@ const ShoppingListViewv2 = () => {
   const [expandedListId, setExpandedListId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [plannedDate, setPlannedDate] = useState('');
   const [rangeBegin, setRangeBegin] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
+  const [filterTab, setFilterTab] = useState<'all' | 'today' | 'upcoming' | 'past_completed'>('all');
   const [isGenerating, setIsGenerating] = useState(false);
   const [syncingListId, setSyncingListId] = useState<number | null>(null);
 
@@ -856,16 +974,47 @@ const ShoppingListViewv2 = () => {
       const json = await res.json();
       if (!Array.isArray(json)) return;
 
-      const mapped: APIShoppingList[] = json.map((it: any) => ({
-        id: it.id ?? 0,
-        shopping_date: it.shopping_date ?? '',
-        range_begin: it.range_begin ?? '',
-        range_end: it.range_end ?? '',
-        shopping_items: it.shopping_items ?? [],
-      }));
+      const mapped: APIShoppingList[] = await Promise.all(
+        json.map(async (it: any) => {
+          if (Array.isArray(it.shopping_items)) {
+            return {
+              id: it.id ?? 0,
+              shopping_date: it.shopping_date ?? '',
+              range_begin: it.range_begin ?? '',
+              range_end: it.range_end ?? '',
+              shopping_items: it.shopping_items,
+            };
+          }
+          try {
+            const detailRes = await sendAPIGET(`shopping_lists/${it.id}`);
+            if (detailRes.ok) {
+              const detailData = await detailRes.json();
+              return {
+                id: it.id ?? 0,
+                shopping_date: it.shopping_date ?? '',
+                range_begin: it.range_begin ?? '',
+                range_end: it.range_end ?? '',
+                shopping_items: detailData.shopping_items ?? [],
+              };
+            }
+          } catch {
+            // fallback
+          }
+          return {
+            id: it.id ?? 0,
+            shopping_date: it.shopping_date ?? '',
+            range_begin: it.range_begin ?? '',
+            range_end: it.range_end ?? '',
+            shopping_items: [],
+          };
+        })
+      );
 
+      // Tri principal par date prévisionnelle (plannedDate / shopping_date) décroissante
       mapped.sort((a, b) => {
-        const diff = new Date(b.shopping_date).getTime() - new Date(a.shopping_date).getTime();
+        const dateA = a.shopping_date ? new Date(a.shopping_date).getTime() : 0;
+        const dateB = b.shopping_date ? new Date(b.shopping_date).getTime() : 0;
+        const diff = dateB - dateA;
         if (diff !== 0) return diff;
         return b.id - a.id;
       });
@@ -917,11 +1066,15 @@ const ShoppingListViewv2 = () => {
 
   const handleOpenGenerateModal = () => {
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = getTodayDateString();
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 6);
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+    const nextWeekYear = nextWeek.getFullYear();
+    const nextWeekMonth = String(nextWeek.getMonth() + 1).padStart(2, '0');
+    const nextWeekDay = String(nextWeek.getDate()).padStart(2, '0');
+    const nextWeekStr = `${nextWeekYear}-${nextWeekMonth}-${nextWeekDay}`;
 
+    setPlannedDate(todayStr);
     setRangeBegin(todayStr);
     setRangeEnd(nextWeekStr);
     setShowGenerateModal(true);
@@ -972,6 +1125,19 @@ const ShoppingListViewv2 = () => {
       }
     } catch (err) {
       console.error('Error updating item quantity:', err);
+    }
+  };
+
+  const handleUpdatePlannedDate = async (listId: number, newDate: string) => {
+    try {
+      const res = await sendAPIPUT(`shopping_lists/${listId}`, {
+        shopping_date: newDate,
+      });
+      if (res.ok) {
+        await loadShoppingLists(listId);
+      }
+    } catch (err) {
+      console.error('Error updating planned date:', err);
     }
   };
 
@@ -1092,8 +1258,12 @@ const ShoppingListViewv2 = () => {
   };
 
   const handleGenerateShoppingList = async () => {
+    if (!plannedDate) {
+      alert('Veuillez sélectionner la date des courses prévues.');
+      return;
+    }
     if (!rangeBegin || !rangeEnd) {
-      alert('Veuillez sélectionner une date de début et une date de fin.');
+      alert('Veuillez sélectionner une date de début et une date de fin de période.');
       return;
     }
     if (rangeBegin > rangeEnd) {
@@ -1128,9 +1298,8 @@ const ShoppingListViewv2 = () => {
         }
       }
 
-      const todayStr = new Date().toISOString().split('T')[0];
       const createListPayload = {
-        shopping_date: todayStr,
+        shopping_date: plannedDate,
         range_begin: rangeBegin,
         range_end: rangeEnd,
       };
@@ -1166,6 +1335,33 @@ const ShoppingListViewv2 = () => {
     }
   };
 
+  // Filtrage selon la date prévisionnelle et l'état
+  const filteredShoppingLists = useMemo(() => {
+    const todayStr = getTodayDateString();
+    return shoppingLists.filter((list) => {
+      const items = list.shopping_items || [];
+      const isCompleted = items.length > 0 && items.every((i) => i.bought);
+      const isPast = Boolean(list.shopping_date && list.shopping_date < todayStr);
+      const isToday = Boolean(list.shopping_date && list.shopping_date === todayStr);
+
+      if (filterTab === 'today') {
+        return isToday;
+      }
+      if (filterTab === 'upcoming') {
+        return Boolean(list.shopping_date && list.shopping_date >= todayStr) && !isCompleted;
+      }
+      if (filterTab === 'past_completed') {
+        return isPast || isCompleted;
+      }
+      return true;
+    });
+  }, [shoppingLists, filterTab]);
+
+  const todayCount = useMemo(() => {
+    const todayStr = getTodayDateString();
+    return shoppingLists.filter((l) => l.shopping_date === todayStr).length;
+  }, [shoppingLists]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1195,13 +1391,61 @@ const ShoppingListViewv2 = () => {
           </button>
         </div>
 
+        {/* Filtres par date prévisionnelle & statut */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setFilterTab('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              filterTab === 'all'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+            }`}
+          >
+            Toutes ({shoppingLists.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('today')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              filterTab === 'today'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+            }`}
+          >
+            Aujourd'hui ({todayCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('upcoming')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              filterTab === 'upcoming'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+            }`}
+          >
+            À venir
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('past_completed')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              filterTab === 'past_completed'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+            }`}
+          >
+            Passées & Complétées
+          </button>
+        </div>
+
         {/* Table */}
         <div className="rounded-t-lg bg-surface-container-high border-outline-variant/50 overflow-hidden">
           <table className="w-full table-auto md:table-fixed">
             <thead>
               <tr className="border-b border-outline-variant">
                 <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-left">
-                  Date de la liste
+                  Date des courses prévues
                 </th>
                 <th className="px-6 py-4 text-[0.65rem] uppercase font-bold text-on-surface-variant text-left">
                   Référence
@@ -1218,14 +1462,18 @@ const ShoppingListViewv2 = () => {
               </tr>
             </thead>
             <tbody className="bg-surface-container-low">
-              {shoppingLists.length === 0 ? (
+              {filteredShoppingLists.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-on-surface-variant text-sm">
-                    {isLoading ? 'Chargement des listes de courses...' : 'Aucune liste de courses générée pour le moment.'}
+                    {isLoading
+                      ? 'Chargement des listes de courses...'
+                      : filterTab === 'today'
+                      ? "Aucune liste de courses prévue pour aujourd'hui."
+                      : 'Aucune liste de courses ne correspond au filtre sélectionné.'}
                   </td>
                 </tr>
               ) : (
-                shoppingLists.map((list) => (
+                filteredShoppingLists.map((list) => (
                   <ShoppingRow
                     key={list.id}
                     list={list}
@@ -1234,6 +1482,7 @@ const ShoppingListViewv2 = () => {
                     onDelete={handleDeleteShoppingList}
                     onToggleItem={handleToggleItemBought}
                     onUpdateQuantity={handleUpdateItemQuantity}
+                    onUpdatePlannedDate={handleUpdatePlannedDate}
                     onAddItem={handleAddItem}
                     onResync={handleResyncList}
                     isSyncing={syncingListId === list.id}
@@ -1247,7 +1496,7 @@ const ShoppingListViewv2 = () => {
 
         {/* Footer */}
         <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between rounded-b-lg border-outline-variant/50 text-xs text-on-surface-variant">
-          <span>Cliquez sur une ligne pour afficher ou masquer le détail des articles.</span>
+          <span>Cliquez sur une ligne pour afficher ou masquer le détail des articles. Survolez la date pour la modifier.</span>
         </div>
       </section>
 
@@ -1278,13 +1527,25 @@ const ShoppingListViewv2 = () => {
               </div>
 
               <p className="text-xs text-on-surface-variant leading-relaxed">
-                Sélectionnez la période des plannings de production pour agréger automatiquement tous les ingrédients nécessaires.
+                Sélectionnez la date prévisionnelle des courses ainsi que la période des plannings de production pour agréger automatiquement tous les ingrédients nécessaires.
               </p>
 
               <div className="space-y-4">
                 <div>
                   <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Date de début
+                    Date des courses prévues (Date prévisionnelle)
+                  </label>
+                  <input
+                    type="date"
+                    value={plannedDate}
+                    onChange={(e) => setPlannedDate(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-surface-container-low rounded-lg text-sm text-on-surface border border-outline-variant/50 focus:ring-2 focus:ring-primary-light/50 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Période des productions - Date de début
                   </label>
                   <input
                     type="date"
@@ -1296,7 +1557,7 @@ const ShoppingListViewv2 = () => {
 
                 <div>
                   <label className="block mb-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Date de fin
+                    Période des productions - Date de fin
                   </label>
                   <input
                     type="date"
@@ -1319,7 +1580,7 @@ const ShoppingListViewv2 = () => {
                 <button
                   type="button"
                   onClick={handleGenerateShoppingList}
-                  disabled={isGenerating || !rangeBegin || !rangeEnd}
+                  disabled={isGenerating || !plannedDate || !rangeBegin || !rangeEnd}
                   className="px-6 py-2.5 rounded-lg text-sm font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center gap-2"
                 >
                   {isGenerating ? (

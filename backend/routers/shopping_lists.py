@@ -57,11 +57,10 @@ def create_shopping_item(shopping_list_id: int, shopping_item: ShoppingItemCreat
     session.refresh(db_shopping_item)
     return db_shopping_item.shopping_list
 
-# TODO : order by date
-@router.get("/", response_model=list[ShoppingListPublic])
+@router.get("/", response_model=list[ShoppingListPublicVerbose])
 def search_shopping_lists(before: date | None = None, after: date | None = None, session: Session = Depends(get_session)):
     """Search for shopping lists by date range."""
-    statement = select(ShoppingList)
+    statement = select(ShoppingList).order_by(ShoppingList.shopping_date.desc(), ShoppingList.id.desc())
 
     if before is not None:
         statement = statement.where(ShoppingList.shopping_date <= before)
