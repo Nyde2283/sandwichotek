@@ -446,6 +446,17 @@ const TopBar = ({ title }: { title: string }) => {
   );
 };
 
+interface AvailableIngredient {
+  id: number;
+  name: string;
+  unit: string;
+  remark?: string | null;
+  shelf_id?: number | null;
+  brand_id?: number | null;
+  shelf?: { id: number; name: string } | null;
+  brand?: { id: number; name: string } | null;
+}
+
 interface APIShoppingItem {
   shopping_list_id: number;
   ingredient_id: number;
@@ -469,17 +480,127 @@ interface APIShoppingList {
   shopping_items?: APIShoppingItem[];
 }
 
+const InlineQuantityInput: React.FC<{
+  quantity: number;
+  unit?: string;
+  onSave: (newQuantity: number) => void;
+}> = ({ quantity, unit, onSave }) => {
+  const [val, setVal] = useState<string>(String(Math.round(quantity)));
+
+  useEffect(() => {
+    setVal(String(Math.round(quantity)));
+  }, [quantity]);
+
+  const handleBlur = () => {
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed >= 0 && parsed !== Math.round(quantity)) {
+      onSave(parsed);
+    } else {
+      setVal(String(Math.round(quantity)));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setVal(String(Math.round(quantity)));
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center justify-end gap-1.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        type="number"
+        min="0"
+        step="1"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        className="w-20 text-right px-2 py-1 bg-surface-container-high/70 hover:bg-surface-container-high focus:bg-surface border border-outline-variant/40 focus:border-primary focus:ring-1 focus:ring-primary rounded text-xs font-semibold tabular-nums text-on-surface outline-none transition-all cursor-text"
+        title="Modifier la quantité"
+      />
+      {unit && (
+        <span className="text-[10px] text-on-surface-variant font-normal min-w-[20px] text-left">
+          {unit}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const ShoppingRow: React.FC<{
   list: APIShoppingList;
   isOpen: boolean;
   onToggleOpen: () => void;
   onDelete: (id: number, e: React.MouseEvent) => void;
   onToggleItem: (listId: number, ingredientId: number, currentBought: boolean) => void;
+  onUpdateQuantity: (listId: number, ingredientId: number, newQuantity: number) => void;
+  onAddItem: (payload: {
+    shopping_list_id: number;
+    ingredient_id: number;
+    quantity: number;
+    bought: boolean;
+  }) => Promise<boolean>;
   onResync: (list: APIShoppingList) => void;
   isSyncing: boolean;
-}> = ({ list, isOpen, onToggleOpen, onDelete, onToggleItem, onResync, isSyncing }) => {
+  availableIngredients: AvailableIngredient[];
+}> = ({
+  list,
+  isOpen,
+  onToggleOpen,
+  onDelete,
+  onToggleItem,
+  onUpdateQuantity,
+  onAddItem,
+  onResync,
+  isSyncing,
+  availableIngredients,
+}) => {
   const items = list.shopping_items || [];
   const boughtCount = items.filter((i) => i.bought).length;
+
+  const [selectedIngredientId, setSelectedIngredientId] = useState<number | ''>('');
+  const [newQuantity, setNewQuantity] = useState<string>('1');
+  const [isAdding, setIsAdding] = useState(false);
+
+  const selectedIngredient = availableIngredients.find(
+    (i) => i.id === Number(selectedIngredientId)
+  );
+
+  const sortedIngredients = useMemo(() => {
+    return [...availableIngredients].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [availableIngredients]);
+
+  const handleAddItemSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const numQty = parseInt(newQuantity, 10);
+    if (!selectedIngredientId || isNaN(numQty) || numQty <= 0) return;
+
+    setIsAdding(true);
+    try {
+      const success = await onAddItem({
+        shopping_list_id: list.id,
+        ingredient_id: Number(selectedIngredientId),
+        quantity: numQty,
+        bought: false,
+      });
+      if (success) {
+        setSelectedIngredientId('');
+        setNewQuantity('1');
+      }
+    } catch (err) {
+      console.error('Error submitting new shopping item:', err);
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   return (
     <>
@@ -565,89 +686,146 @@ const ShoppingRow: React.FC<{
                         e.stopPropagation();
                         onResync(list);
                       }}
-                      disabled={isSyncing}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors disabled:opacity-50 cursor-pointer"
-                      title="Réactualiser la liste selon les plannings de production"
+                      disabled={true}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-on-surface-variant/40 bg-surface-container-high/60 border border-outline-variant/30 transition-colors opacity-50 cursor-not-allowed"
+                      title="Réactualisation temporairement désactivée"
                     >
                       <History size={13} className={isSyncing ? "animate-spin" : ""} />
                       <span>{isSyncing ? "Réactualisation..." : "Réactualiser"}</span>
                     </button>
                   </div>
 
-                  {items.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-on-surface-variant bg-surface-container-lowest rounded-b-lg shadow-custom">
-                      Aucun produit dans cette liste de courses.
-                    </div>
-                  ) : (
-                    <table className="w-full text-left border-collapse bg-surface-container-lowest rounded-b-lg shadow-custom">
-                      <thead>
-                        <tr className="border-b border-outline-variant">
-                          <th className="w-10 px-4 py-2"></th>
-                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
-                            Article
-                          </th>
-                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
-                            Marque
-                          </th>
-                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70 text-right">
-                            Quantité
-                          </th>
-                          <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
-                            Rayon
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline-variant/50">
-                        {items.map((item, idx) => (
-                          <tr
-                            key={`${item.ingredient_id}-${idx}`}
-                            className={`text-xs transition-all ${
-                              item.bought
-                                ? 'opacity-40 bg-surface-container-low/30'
-                                : 'opacity-100'
-                            }`}
-                          >
-                            <td className="px-4 py-2.5 text-center">
-                              <input
-                                type="checkbox"
-                                checked={item.bought}
-                                onChange={() =>
-                                  onToggleItem(list.id, item.ingredient_id, item.bought)
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-4 h-4 rounded border-outline-variant text-primary accent-primary cursor-pointer"
-                              />
-                            </td>
-
-                            <td
-                              className={`px-4 py-2.5 font-medium transition-all ${
+                  <div className="bg-surface-container-lowest rounded-b-lg shadow-custom overflow-hidden">
+                    {items.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-on-surface-variant">
+                        Aucun produit dans cette liste de courses.
+                      </div>
+                    ) : (
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-outline-variant">
+                            <th className="w-10 px-4 py-2"></th>
+                            <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
+                              Article
+                            </th>
+                            <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
+                              Marque
+                            </th>
+                            <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70 text-right">
+                              Quantité
+                            </th>
+                            <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
+                              Rayon
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/50">
+                          {items.map((item, idx) => (
+                            <tr
+                              key={`${item.ingredient_id}-${idx}`}
+                              className={`text-xs transition-all ${
                                 item.bought
-                                  ? 'line-through text-on-surface-variant'
-                                  : 'text-on-surface'
+                                  ? 'opacity-40 bg-surface-container-low/30'
+                                  : 'opacity-100'
                               }`}
                             >
-                              {item.ingredient?.name || `Ingrédient #${item.ingredient_id}`}
-                            </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={item.bought}
+                                  onChange={() =>
+                                    onToggleItem(list.id, item.ingredient_id, item.bought)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-4 h-4 rounded border-outline-variant text-primary accent-primary cursor-pointer"
+                                />
+                              </td>
 
-                            <td className="px-4 py-2.5 text-on-surface-variant/80 italic">
-                              {item.ingredient?.brand?.name || '—'}
-                            </td>
+                              <td
+                                className={`px-4 py-2.5 font-medium transition-all ${
+                                  item.bought
+                                    ? 'line-through text-on-surface-variant'
+                                    : 'text-on-surface'
+                                }`}
+                              >
+                                {item.ingredient?.name || `Ingrédient #${item.ingredient_id}`}
+                              </td>
 
-                            <td className="px-4 py-2.5 text-right tabular-nums text-on-surface font-medium">
-                              {item.quantity}{' '}
-                              <span className="text-[10px] text-on-surface-variant font-normal">
-                                {item.ingredient?.unit || ''}
-                              </span>
-                            </td>
+                              <td className="px-4 py-2.5 text-on-surface-variant/80 italic">
+                                {item.ingredient?.brand?.name || '—'}
+                              </td>
 
-                            <td className="px-4 py-2.5 text-[10px] text-on-surface-variant/80 uppercase tracking-tight">
-                              {item.ingredient?.shelf?.name || '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
+                              <td className="px-4 py-2.5 text-right tabular-nums text-on-surface font-medium">
+                                <InlineQuantityInput
+                                  quantity={item.quantity}
+                                  unit={item.ingredient?.unit}
+                                  onSave={(newQty) =>
+                                    onUpdateQuantity(list.id, item.ingredient_id, newQty)
+                                  }
+                                />
+                              </td>
+
+                              <td className="px-4 py-2.5 text-[10px] text-on-surface-variant/80 uppercase tracking-tight">
+                                {item.ingredient?.shelf?.name || '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+
+                    {/* Formulaire d'ajout manuel d'article */}
+                    <form
+                      onSubmit={handleAddItemSubmit}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex flex-wrap items-center gap-3 px-4 py-3 bg-surface-container/60 border-t border-outline-variant/30 text-xs"
+                    >
+                      <div className="flex-1 min-w-[200px]">
+                        <select
+                          value={selectedIngredientId}
+                          onChange={(e) => setSelectedIngredientId(e.target.value ? Number(e.target.value) : '')}
+                          className="w-full px-3 py-1.5 bg-surface-container-lowest border border-outline-variant/50 rounded-md text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-sm"
+                        >
+                          <option value="">Ajouter un ingrédient...</option>
+                          {sortedIngredients.map((ing) => {
+                            const isAlreadyInList = items.some((it) => it.ingredient_id === ing.id);
+                            return (
+                              <option key={ing.id} value={ing.id} disabled={isAlreadyInList}>
+                                {ing.name}
+                                {ing.brand?.name ? ` — ${ing.brand.name}` : ''}
+                                {ing.unit ? ` (${ing.unit})` : ''}
+                                {isAlreadyInList ? ' (déjà dans la liste)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          placeholder="Quantité"
+                          value={newQuantity}
+                          onChange={(e) => setNewQuantity(e.target.value)}
+                          className="w-24 px-3 py-1.5 bg-surface-container-lowest border border-outline-variant/50 rounded-md text-xs text-on-surface text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-sm tabular-nums"
+                        />
+                        <span className="text-[11px] text-on-surface-variant font-medium min-w-[24px]">
+                          {selectedIngredient?.unit || ''}
+                        </span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={!selectedIngredientId || !newQuantity || Number(newQuantity) <= 0 || isAdding}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        <span>{isAdding ? 'Ajout...' : 'Ajouter'}</span>
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </motion.div>
             </td>
@@ -660,6 +838,7 @@ const ShoppingRow: React.FC<{
 
 const ShoppingListViewv2 = () => {
   const [shoppingLists, setShoppingLists] = useState<APIShoppingList[]>([]);
+  const [availableIngredients, setAvailableIngredients] = useState<AvailableIngredient[]>([]);
   const [expandedListId, setExpandedListId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -704,6 +883,20 @@ const ShoppingListViewv2 = () => {
     }
   };
 
+  const loadIngredients = async () => {
+    try {
+      const res = await sendAPIGET('ingredients/');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAvailableIngredients(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading available ingredients:', err);
+    }
+  };
+
   const fetchListDetails = async (listId: number) => {
     try {
       const res = await sendAPIGET(`shopping_lists/${listId}`);
@@ -719,6 +912,7 @@ const ShoppingListViewv2 = () => {
 
   useEffect(() => {
     loadShoppingLists();
+    loadIngredients();
   }, []);
 
   const handleOpenGenerateModal = () => {
@@ -758,38 +952,47 @@ const ShoppingListViewv2 = () => {
   };
 
   const handleToggleItemBought = async (listId: number, ingredientId: number, currentBought: boolean) => {
-    const newBought = !currentBought;
-    setShoppingLists((prev) =>
-      prev.map((l) => {
-        if (l.id !== listId || !l.shopping_items) return l;
-        return {
-          ...l,
-          shopping_items: l.shopping_items.map((item) =>
-            item.ingredient_id === ingredientId ? { ...item, bought: newBought } : item
-          ),
-        };
-      })
-    );
-
     try {
-      const res = await sendAPIPUT(`shopping_lists/${listId}/items/${ingredientId}`, {
-        bought: newBought,
+      await sendAPIPUT(`shopping_lists/${listId}/items/${ingredientId}`, {
+        bought: !currentBought,
       });
-      if (!res.ok) {
-        setShoppingLists((prev) =>
-          prev.map((l) => {
-            if (l.id !== listId || !l.shopping_items) return l;
-            return {
-              ...l,
-              shopping_items: l.shopping_items.map((item) =>
-                item.ingredient_id === ingredientId ? { ...item, bought: currentBought } : item
-              ),
-            };
-          })
-        );
-      }
+      await fetchListDetails(listId);
     } catch (err) {
       console.error('Error updating item bought state:', err);
+    }
+  };
+
+  const handleUpdateItemQuantity = async (listId: number, ingredientId: number, quantity: number) => {
+    try {
+      const res = await sendAPIPUT(`shopping_lists/${listId}/items/${ingredientId}`, {
+        quantity,
+      });
+      if (res.ok) {
+        await fetchListDetails(listId);
+      }
+    } catch (err) {
+      console.error('Error updating item quantity:', err);
+    }
+  };
+
+  const handleAddItem = async (payload: {
+    shopping_list_id: number;
+    ingredient_id: number;
+    quantity: number;
+    bought: boolean;
+  }): Promise<boolean> => {
+    try {
+      const res = await sendAPIPOST(`shopping_lists/${payload.shopping_list_id}/items`, payload);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert(errorData.detail || "Erreur lors de l'ajout de l'article.");
+        return false;
+      }
+      await fetchListDetails(payload.shopping_list_id);
+      return true;
+    } catch (err) {
+      console.error('Error adding item to shopping list:', err);
+      return false;
     }
   };
 
@@ -1030,8 +1233,11 @@ const ShoppingListViewv2 = () => {
                     onToggleOpen={() => handleToggleExpandList(list.id)}
                     onDelete={handleDeleteShoppingList}
                     onToggleItem={handleToggleItemBought}
+                    onUpdateQuantity={handleUpdateItemQuantity}
+                    onAddItem={handleAddItem}
                     onResync={handleResyncList}
                     isSyncing={syncingListId === list.id}
+                    availableIngredients={availableIngredients}
                   />
                 ))
               )}
