@@ -7,8 +7,8 @@ from ..db import get_session
 from ..tools.response_models import *
 
 router = APIRouter(
-    prefix="/shelfs",
-    tags=["Shelfs"]
+    prefix="/shelves",
+    tags=["Shelves"]
 )
 
 @router.post("/", response_model=ShelfPublicVerbose)
@@ -21,8 +21,8 @@ def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
     return db_shelf
 
 @router.get("/",  response_model=list[ShelfPublicVerbose])
-def search_shelfs(q: str | None = None, session: Session = Depends(get_session)):
-    """Search for shelfs by name or ID."""
+def search_shelves(q: str | None = None, session: Session = Depends(get_session)):
+    """Search for shelves by name or ID."""
     if q is None:
         return session.exec(select(Shelf)).all()
     if q.isdigit():

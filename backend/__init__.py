@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from .db import init_db
 from .db.models import *
-from .routers import misc, shelfs, brands, meals, ingredients, meal_productions, shopping_lists
+from .routers import misc, shelves, brands, meals, ingredients, meal_productions, shopping_lists
 
 APP_HOST = os.getenv("APP_HOST")
 APP_PORT = os.getenv("APP_PORT")
@@ -35,7 +35,7 @@ app.add_middleware(
 app.openapi_schema = None # disable caching of the OpenAPI schema to avoid issues with reloading in development
 
 app.include_router(misc.router)
-app.include_router(shelfs.router)
+app.include_router(shelves.router)
 app.include_router(brands.router)
 app.include_router(meals.router)
 app.include_router(ingredients.router)

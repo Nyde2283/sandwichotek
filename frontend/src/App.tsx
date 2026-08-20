@@ -2336,7 +2336,7 @@ const ProductsView = () => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [persistedIngredients, setPersistedIngredients] = useState<Ingredient[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [shelfs, setShelfs] = useState<Shelf[]>([]);
+  const [shelves, setShelves] = useState<Shelf[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const hasUnsavedCard = useMemo(() => {
@@ -2508,17 +2508,17 @@ const ProductsView = () => {
     }
   };
 
-  const loadShelfs = async () => {
+  const loadShelves = async () => {
     try {
-      const res = await sendAPIGET('shelfs/');
+      const res = await sendAPIGET('shelves/');
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`Failed to fetch shelfs: ${res.status} ${text}`);
+        throw new Error(`Failed to fetch shelves: ${res.status} ${text}`);
       }
 
       const json = await res.json();
       if (!Array.isArray(json)) {
-        console.warn('Unexpected shelfs response:', json);
+        console.warn('Unexpected shelves response:', json);
         return;
       }
 
@@ -2527,16 +2527,16 @@ const ProductsView = () => {
         name: it.name ?? '',
       }));
 
-      setShelfs(mapped);
+      setShelves(mapped);
     } catch (err) {
-      console.error('Error loading shelfs', err);
+      console.error('Error loading shelves', err);
     }
   };
 
   useEffect(() => {
     loadIngredients();
     loadBrands();
-    loadShelfs();
+    loadShelves();
   }, []);
 
   const filteredIngredients = ingredients.filter(
@@ -2645,7 +2645,7 @@ const ProductsView = () => {
                         className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
                       >
                         <option value={0}>Aucun rayon</option>
-                        {shelfs.map((shelf) => (
+                        {shelves.map((shelf) => (
                           <option key={shelf.id} value={shelf.id}>
                             {shelf.name}
                           </option>

@@ -7,7 +7,7 @@ from backend.db.models import Shelf
 
 def test_create_shelf(client, session):
     body = {"name": "fromages"}
-    response = client.post("/shelfs", json=body)
+    response = client.post("/shelves", json=body)
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
@@ -27,22 +27,22 @@ def test_create_shelf(client, session):
 # ---------------------------------------------------------------------------- #
 
 def test_get_shelf_list_on_empty_db(client):
-    response = client.get("/shelfs")
+    response = client.get("/shelves")
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
-def test_search_shelfs_by_name_on_empty_db(client):
-    response = client.get("/shelfs?q=fromages")
+def test_search_shelves_by_name_on_empty_db(client):
+    response = client.get("/shelves?q=fromages")
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
-def test_search_shelfs_by_id_on_empty_db(client):
-    response = client.get("/shelfs?q=1")
+def test_search_shelves_by_id_on_empty_db(client):
+    response = client.get("/shelves?q=1")
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
 def test_get_shelf_list(client, seeded_db):
-    response = client.get("/shelfs")
+    response = client.get("/shelves")
     assert response.status_code == status.HTTP_200_OK
 
     for i, shelf in enumerate(seeded_db[Shelf]):
@@ -52,8 +52,8 @@ def test_get_shelf_list(client, seeded_db):
         }.items() <= response.json()[i].items()
         assert response.json()[i]["ingredients"] != []
 
-def test_search_shelfs_by_id(client, seeded_db):
-    response = client.get("/shelfs?q=1")
+def test_search_shelves_by_id(client, seeded_db):
+    response = client.get("/shelves?q=1")
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) == 1
     assert {
@@ -61,8 +61,8 @@ def test_search_shelfs_by_id(client, seeded_db):
         "id": 1
     }.items() <= response.json()[0].items()
 
-def test_search_shelfs_by_name(client, seeded_db):
-    response = client.get("/shelfs?q=fromages")
+def test_search_shelves_by_name(client, seeded_db):
+    response = client.get("/shelves?q=fromages")
     assert response.status_code == status.HTTP_200_OK
     assert len(response.json()) == 1
     assert {
@@ -71,13 +71,13 @@ def test_search_shelfs_by_name(client, seeded_db):
     }.items() <= response.json()[0].items()
 
 def test_get_shelf_by_id_on_empty_db(client):
-    response = client.get("/shelfs/1")
+    response = client.get("/shelves/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Shelf not found"}
 
 def test_get_shelf_by_id(client, seeded_db):
     for i, shelf in enumerate(seeded_db[Shelf]):
-        response = client.get(f"/shelfs/{i + 1}")
+        response = client.get(f"/shelves/{i + 1}")
         assert response.status_code == status.HTTP_200_OK
         assert {
             **shelf,
@@ -90,14 +90,14 @@ def test_get_shelf_by_id(client, seeded_db):
 
 def test_update_shelf_by_id_on_empty_db(client):
     body = {"name": "fromages"}
-    response = client.put("/shelfs/1", json=body)
+    response = client.put("/shelves/1", json=body)
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Shelf not found"}
 
 def test_update_shelf_by_id(client, session, seeded_db):
     body = {"name": "fr0m@g3"}
-    response = client.put("/shelfs/3", json=body)
+    response = client.put("/shelves/3", json=body)
 
     assert response.status_code == status.HTTP_200_OK
     assert {
@@ -114,12 +114,12 @@ def test_update_shelf_by_id(client, session, seeded_db):
 
 def test_delete_shelf_by_id_on_empty_db(client, session):
     assert session.get(Shelf, 1) == None
-    response = client.delete("/shelfs/1")
+    response = client.delete("/shelves/1")
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": "Shelf not found"}
 
 def test_delete_shelf_by_id_conflict_foreign_key(client, session, seeded_db):
-    response = client.delete("/shelfs/3")
+    response = client.delete("/shelves/3")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]["msg"] == "Foreign key violation ! Check 'blocking_ingredients' field"
@@ -134,7 +134,7 @@ def test_delete_shelf_by_id(client, session, seeded_db):
     session.commit()
     shelf_id = shelf.id
 
-    response = client.delete(f"/shelfs/{shelf.id}")
+    response = client.delete(f"/shelves/{shelf.id}")
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert session.get(Shelf, shelf_id) == None
