@@ -2,90 +2,43 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Menu,
   X,
-  LayoutDashboard,
-  ShoppingCart,
   Utensils,
-  Factory,
-  HelpCircle,
   LogOut,
   Search,
-  Bell,
-  Settings,
   PlusCircle,
-  Download,
   History,
   ChevronDown,
   ChevronLeft,
   Calendar,
-  Egg,
   ScrollText,
-  Droplets,
-  Fish,
-  Leaf,
-  Link as LinkIcon,
-  ArrowLeftRight,
-  Package,
   Pencil,
-  MoreHorizontal,
   ChevronRight,
-  Camera,
   Trash2,
-  Zap,
-  Apple,
-  ClipboardCheck,
   AppleIcon,
-  Eye,
   Plus,
-  Scroll,
-  Save
+  Save,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// --- Types ---
-const BASE_URL = 'http://localhost:8000'
-const APP_NAME = "Sandwichotek"
-const SHOPPING_LIST_NAME = "Liste de courses"
-const RECIPES_NAME = "Recettes"
-const PRODUCTS_NAME = "Produits"
-const ARTICLES_NAMES = "Articles"
-const PLANNING_NAME = "Planning hebdomadaire"
+/* ==========================================================================
+   TYPES & INTERFACES
+   ========================================================================== */
 
+const BASE_API_URL = 'http://localhost:8000';
+const APP_NAME = 'Sandwichotek';
+const SHOPPING_LIST_NAME = 'Liste de courses';
+const RECIPES_NAME = 'Recettes';
+const PRODUCTS_NAME = 'Produits';
+const PLANNING_NAME = 'Planning hebdomadaire';
 
 const SIDEBAR_IDS = {
   SHOPPING_LIST_NAME: 'shoppinglist',
-  RECIPES_NAME: "recipes",
-  PRODUCTS_NAME: "products",
-  ARTICLES_NAMES: "articles",
-  PLANNING_NAME: "planning",
-} as const
+  RECIPES_NAME: 'recipes',
+  PRODUCTS_NAME: 'products',
+  PLANNING_NAME: 'planning',
+} as const;
 
-
-type ViewType = 'shoppinglist' | 'recipes' | 'products' | 'articles' | 'planning';
-
-// --- Types ---
-
-
-
-interface RecipeIngredient {
-  id: string;
-  productId: string;
-  quantity: number;
-  unit: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-}
-
-interface Article {
-  id: string;
-  name: string;
-  productId: string;
-  brand: string;
-  quantity: number;
-  unit: string;
-}
+type ViewType = 'shoppinglist' | 'recipes' | 'products' | 'planning';
 
 interface Ingredient {
   id: number;
@@ -99,352 +52,48 @@ interface Ingredient {
 interface Brand {
   id: number;
   name: string;
+  brand?: number;
+  shelf?: number;
+  note?: string;
 }
 
 interface Shelf {
-  id: number,
-  name: string
+  id: number;
+  name: string;
 }
 
 interface RecipeItem {
-  ingredient: Ingredient,
-  quantity: number,
+  ingredient: Ingredient;
+  quantity: number;
 }
 
 interface Recipe {
-  meal_id: number,
-  items: RecipeItem[],
+  meal_id: number;
+  items: RecipeItem[];
 }
 
 interface MealProduction {
-  id: number,
-  meal_id: number,
-  date: string,
-  quantity: number,
+  id: number;
+  meal_id: number;
+  date: string;
+  quantity: number;
 }
 
 interface Meal {
-  id: number,
-  name: string,
-  veggy: boolean,
-  meal_productions: MealProduction[],
-  recipe_items: RecipeItem[],
-}
-
-interface ShoppingListItem {
+  id: number;
   name: string;
-  brand: string;
-  quantity: number;
-  unit: string;
-  shelf: string;
-  taken: true | false
+  veggy: boolean;
+  meal_productions: MealProduction[];
+  recipe_items: RecipeItem[];
 }
 
 interface ProdCard {
-  productionId: number; // L'ID de la MealProduction en BDD (pour les update/delete)
-  mealId: number;       // L'ID du plat
-  title: string;        // Le nom du plat
-  units: number;        // La quantité produite
-  date: string;         // La date (ex: "2026-07-25")
-}
-
-// --- Mock Data ---
-
-
-const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: 'Tomate' },
-  { id: '2', name: 'Salade' },
-  { id: '3', name: 'Emmental rapé' },
-  { id: '4', name: 'Saucisse' },
-]
-
-
-interface ShoppingList {
-  id: string;
+  productionId: number;
+  mealId: number;
+  title: string;
+  units: number;
   date: string;
-  items: ShoppingListItem[];
 }
-
-// --- Mock Data ---
-const SHOPPING_DATA: ShoppingList[] = [
-  {
-    id: "SL-001",
-    date: "2026-03-25",
-    items: [
-      {name: 'Tomate', brand: 'Pouce', quantity: 12, unit: 'unité', shelf: 'Légumes', taken: true},
-      {name: 'Brie', brand: 'Pouce', quantity: 250, unit: 'g', shelf: 'Produits laitiers', taken: true},
-      {name: 'Oignon Rouge', brand: '', quantity: 2, unit: 'unité', shelf: 'Légumes', taken: false}
-    ]
-  },
-  {
-    id: "SL-002",
-    date: "2026-04-01",
-    items: [
-      {name: 'Tomate', brand: 'Pouce', quantity: 9, unit: 'unité', shelf: 'Légumes', taken: false},
-      {name: 'Comté', brand: 'Pouce', quantity: 420, unit: 'g', shelf: 'Produits laitiers', taken: true},
-      {name: 'Boeuf haché surgelé', brand: 'Pouce', quantity: 800, unit: 'g', shelf: 'Surgelés', taken: false}
-    ]
-  },
-  {
-    id: "SL-003",
-    date: "2026-03-10",
-    items: [
-      {name: 'Concombre', brand: '', quantity: 3, unit: 'g', shelf: 'Légumes', taken: false},
-      {name: 'Crème fraîche', brand: 'Pouce', quantity: 15, unit: 'cL', shelf: 'Produits laitiers', taken: true},
-      {name: 'Durum', brand: '', quantity: 8, unit: 'unité', shelf: 'Produits du monde', taken: false}
-    ]
-  }
-]
-
-/**
- * Génère les dates de la semaine (format YYYY-MM-DD) à partir d'une date donnée.
- * @param referenceDate La date de référence (par défaut aujourd'hui)
- * @param includeWeekend Inclure le samedi et le dimanche (défaut : false)
- */
-export const getWeekDates = (referenceDate = new Date(), includeWeekend = false): string[] => {
-  const date = new Date(referenceDate);
-  
-  // 1. Trouver le jour de la semaine (0 = Dimanche, 1 = Lundi, ..., 6 = Samedi)
-  const dayOfWeek = date.getDay();
-  
-  // 2. Calculer le décalage pour remonter jusqu'au Lundi
-  // En JS, le dimanche est 0. On le transforme en 7 pour simplifier les calculs.
-  const distanceToMonday = (dayOfWeek === 0 ? 7 : dayOfWeek) - 1;
-  
-  // 3. Poser la date au lundi de la semaine en cours
-  const monday = new Date(date);
-  monday.setDate(date.getDate() - distanceToMonday);
-
-  // 4. Générer les 5 (ou 7) jours de la semaine
-  const daysCount = includeWeekend ? 7 : 5;
-  const weekDates: string[] = [];
-
-  for (let i = 0; i < daysCount; i++) {
-    const currentDay = new Date(monday);
-    currentDay.setDate(monday.getDate() + i);
-    
-    // Formatage au format 'YYYY-MM-DD' (ex: "2026-07-20")
-    const isoDate = currentDay.toISOString().split('T')[0];
-    weekDates.push(isoDate);
-  }
-
-  return weekDates;
-};
-
-const formatDateHeader = (dateStr: string) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-};
-
-async function sendAPIPOST(route: String, payload: {}): Promise<Response> {
-  const res = await fetch(`${BASE_URL}/${route}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-  return res
-}
-
-async function sendAPIGET(route: String): Promise<Response> {
-  const res = await fetch(`${BASE_URL}/${route}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    });
-  return res
-}
-
-async function sendAPIPUT(route: String, payload: {}): Promise<Response> {
-  const res = await fetch(`${BASE_URL}/${route}`, {
-      method: 'PUT',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-  return res
-}
-
-async function sendAPIDELETE(route: String): Promise<Response> {
-  const res = await fetch(`${BASE_URL}/${route}`, {
-      method: 'DELETE',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    });
-  return res
-}
-
-const ClickToEdit = ({ initialValue, onSave, placeholder }: { initialValue: string, onSave: (val: string) => void, placeholder?: string }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(initialValue);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select(); // Sélectionne tout le texte d'un coup
-    }
-  }, [isEditing]);
-
-  const handleSave = () => {
-    setIsEditing(false);
-    if (value !== initialValue) {
-      onSave(value);
-    }
-  };
-
-  const handleCancel = () => {
-    setValue(initialValue);
-    setIsEditing(false);
-  };
-
-  if (isEditing) {
-    return (
-      <div className="flex-1 min-w-0">
-        {/* className="flex items-center gap-2 w-full max-w-md"> */}
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSave();
-            if (e.key === 'Escape') handleCancel();
-          }}
-          onBlur={handleSave}
-          className="bg-surface-container w-full border-2 border-primary rounded-lg px-3 py-1.5 text-lg font-semibold outline-none shadow-sm
-          animate-pop"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      onClick={() => setIsEditing(true)}
-      className="group flex items-center justify-start cursor-pointer py-1 px-1 rounded-xl border-2 border-transparent hover:bg-surface-container-low animate-pop"
-    >
-      <span className={`text-lg font-semibold tracking-tight ${!value && placeholder ? 'text-on-surface-variant/50 italic' : 'text-on-surface'}`}>
-        {value || placeholder || ''}
-      </span>
-      <Pencil
-        size={16}
-        className="text-on-surface-variant opacity-100 group-hover:opacity-100 ml-2"
-      />
-    </div>
-  );
-};
-
-// --- Components ---
-
-interface SidebarProps {
-  currentView: ViewType;
-  setView: (v: ViewType) => void;
-  isOpen: boolean;           // Nouvel état
-  setIsOpen: (o: boolean) => void; // Pour fermer
-}
-
-const Logo = () => {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-1 h-10 bg-primary rounded-xl flex items-center justify-center text-white"></div>
-      <div>
-        <h1 className="text-lg font-bold text-primary uppercase tracking-widest leading-none mb-1">{APP_NAME}</h1>
-        <p className="text-[0.65rem] text-on-surface-variant font-medium">Le bar, c'est mieux maintenant</p>
-      </div>
-    </div>
-  )
-}
-
-const Sidebar = ({ currentView, setView, isOpen, setIsOpen }: SidebarProps) => {
-  const navItems = [
-    { id: SIDEBAR_IDS.SHOPPING_LIST_NAME, icon: <ScrollText size={20} />, label: SHOPPING_LIST_NAME },
-    { id: SIDEBAR_IDS.RECIPES_NAME, icon: <Utensils size={20} />, label: RECIPES_NAME },
-    { id: SIDEBAR_IDS.PRODUCTS_NAME, icon: <AppleIcon size={20} />, label: PRODUCTS_NAME },
-    { id: SIDEBAR_IDS.ARTICLES_NAMES, icon: <ShoppingCart size={20} />, label: ARTICLES_NAMES },
-    { id: SIDEBAR_IDS.PLANNING_NAME, icon: <Calendar size={20} />, label: PLANNING_NAME },
-  ];
-
-  return (
-    <>
-      {/* Overlay : floute l'arrière-plan quand la sidebar est ouverte sur mobile */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
-          />
-        )}
-      </AnimatePresence>
-
-      <aside className={`
-        fixed left-0 top-0 h-screen w-64 z-50 bg-surface-container-low border-r border-outline-variant/15 flex flex-col py-4 transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
-        lg:translate-x-0 overflow-auto
-      `}>
-        <div className="px-4 mb-10">
-          <Logo></Logo>  
-        </div>
-
-        <nav className="flex-1 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                setView(item.id as ViewType);
-                setIsOpen(false); // Ferme la sidebar après clic sur mobile
-              }}
-              className={`w-full group flex items-center py-3 px-6 transition-all relative text-left ${currentView === item.id ? 'text-primary font-semibold bg-white/50' : 'text-on-surface-variant hover:bg-surface-container-high/50'
-                }`}
-            >
-              {currentView === item.id && (
-                <motion.div layoutId="activeNav" className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
-              )}
-              <span className={`mr-4 ${currentView === item.id ? 'text-primary' : 'text-on-surface-variant group-hover:text-primary'}`}>
-                {item.icon}
-              </span>
-              <span className="text-sm tracking-wide">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="mt-auto px-6">
-          <a href="#" className="flex items-center py-2 text-tertiary font-medium text-sm">
-            <LogOut size={18} className="mr-3" /> Déconnexion
-          </a>
-        </div>
-      </aside>
-    </>
-  );
-};
-
-const TopBar = ({ title }: { title: string }) => {
-  return (
-    <header className="w-full h-16 sticky top-0 z-40 bg-surface flex items-center justify-between px-12 max-w-[1440px] mx-auto">
-
-
-      <div className="flex items-center gap-6">
-        {/* Place holder pour une éventuelle topbar */}
-      </div>
-    </header>
-  );
-};
 
 interface AvailableIngredient {
   id: number;
@@ -472,33 +121,340 @@ interface APIShoppingItem {
   };
 }
 
-const getTodayDateString = (): string => {
-  const d = new Date();
+interface APIShoppingList {
+  id: number;
+  shopping_date: string;
+  range_begin: string;
+  range_end: string;
+  shopping_items?: APIShoppingItem[];
+}
+
+interface SidebarProps {
+  currentView: ViewType;
+  setView: (v: ViewType) => void;
+  isOpen: boolean;
+  setIsOpen: (o: boolean) => void;
+}
+
+interface ClickToEditProps {
+  initialValue: string;
+  onSave: (val: string) => void;
+  placeholder?: string;
+}
+
+interface InlineQuantityInputProps {
+  quantity: number;
+  unit?: string;
+  onSave: (newQuantity: number) => void;
+}
+
+interface ShoppingRowProps {
+  list: APIShoppingList;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onDelete: (id: number, e: React.MouseEvent) => void;
+  onToggleItem: (listId: number, ingredientId: number, currentBought: boolean) => void;
+  onUpdateQuantity: (listId: number, ingredientId: number, newQuantity: number) => void;
+  onUpdatePlannedDate?: (listId: number, newDate: string) => Promise<void>;
+  onAddItem: (payload: {
+    shopping_list_id: number;
+    ingredient_id: number;
+    quantity: number;
+    bought: boolean;
+  }) => Promise<boolean>;
+  onResync: (list: APIShoppingList) => void;
+  isSyncing: boolean;
+  availableIngredients: AvailableIngredient[];
+}
+
+/* ==========================================================================
+   HELPERS & UTILS
+   ========================================================================== */
+
+export const formatDateISO = (d: Date): string => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
-interface APIShoppingList {
-  id: number;
-  shopping_date: string; // Date des courses prévues (plannedDate)
-  range_begin: string;
-  range_end: string;
-  shopping_items?: APIShoppingItem[];
+export const getTodayDateString = (): string => {
+  return formatDateISO(new Date());
+};
+
+export const formatDateHeader = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+
+export const getWeekDates = (referenceDate = new Date(), includeWeekend = false): string[] => {
+  const date = new Date(referenceDate);
+  const dayOfWeek = date.getDay();
+  const distanceToMonday = (dayOfWeek === 0 ? 7 : dayOfWeek) - 1;
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - distanceToMonday);
+
+  const daysCount = includeWeekend ? 7 : 5;
+  const weekDates: string[] = [];
+
+  for (let i = 0; i < daysCount; i++) {
+    const currentDay = new Date(monday);
+    currentDay.setDate(monday.getDate() + i);
+    weekDates.push(formatDateISO(currentDay));
+  }
+
+  return weekDates;
+};
+
+export const isIngredientDirty = (ing: Ingredient, persistedIngredients: Ingredient[]): boolean => {
+  if (ing.id === 0) return true;
+  const persisted = persistedIngredients.find((p) => p.id === ing.id);
+  if (!persisted) return true;
+  return (
+    ing.name.trim() !== persisted.name.trim() ||
+    ing.unit.trim() !== persisted.unit.trim() ||
+    ing.brand !== persisted.brand ||
+    ing.shelf !== persisted.shelf ||
+    (ing.note ?? '').trim() !== (persisted.note ?? '').trim()
+  );
+};
+
+async function sendAPIPOST(route: string, payload: unknown): Promise<Response> {
+  const res = await fetch(`${BASE_API_URL}/${route}`, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return res;
 }
 
-const InlineQuantityInput: React.FC<{
-  quantity: number;
-  unit?: string;
-  onSave: (newQuantity: number) => void;
-}> = ({ quantity, unit, onSave }) => {
+async function sendAPIGET(route: string): Promise<Response> {
+  const res = await fetch(`${BASE_API_URL}/${route}`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+  });
+  return res;
+}
+
+async function sendAPIPUT(route: string, payload: unknown): Promise<Response> {
+  const res = await fetch(`${BASE_API_URL}/${route}`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return res;
+}
+
+async function sendAPIDELETE(route: string): Promise<Response> {
+  const res = await fetch(`${BASE_API_URL}/${route}`, {
+    method: 'DELETE',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+  });
+  return res;
+}
+
+async function aggregateIngredientsForRange(rangeBegin: string, rangeEnd: string): Promise<Record<number, number>> {
+  const prodRes = await sendAPIGET(`meal_productions/?after=${rangeBegin}&before=${rangeEnd}`);
+  if (!prodRes.ok) throw new Error('Erreur lors de la récupération des productions.');
+  const productions: any[] = await prodRes.json();
+
+  const aggregatedTotals: Record<number, number> = {};
+  const mealCache: Record<number, any> = {};
+
+  for (const prod of productions) {
+    const mealId = prod.meal_id;
+    if (!mealCache[mealId]) {
+      const mealRes = await sendAPIGET(`meals/${mealId}`);
+      if (mealRes.ok) {
+        mealCache[mealId] = await mealRes.json();
+      }
+    }
+    const meal = mealCache[mealId];
+    if (meal && Array.isArray(meal.recipe_items)) {
+      for (const rItem of meal.recipe_items) {
+        const ingId = rItem.ingredient_id ?? rItem.ingredient?.id;
+        if (ingId) {
+          const qty = (rItem.quantity ?? 0) * (prod.quantity ?? 0);
+          aggregatedTotals[ingId] = (aggregatedTotals[ingId] || 0) + qty;
+        }
+      }
+    }
+  }
+
+  return aggregatedTotals;
+}
+
+const ClickToEdit: React.FC<ClickToEditProps> = ({ initialValue, onSave, placeholder }) => {
+  /* --- HOOKS & STATE --- */
+  const [isEditing, setIsEditing] = useState(false);
+  const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  /* --- HANDLERS --- */
+  const handleSave = () => {
+    setIsEditing(false);
+    if (value !== initialValue) {
+      onSave(value);
+    }
+  };
+
+  const handleCancel = () => {
+    setValue(initialValue);
+    setIsEditing(false);
+  };
+
+  /* --- RENDER --- */
+  if (isEditing) {
+    return (
+      <div className="flex-1 min-w-0">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave();
+            if (e.key === 'Escape') handleCancel();
+          }}
+          onBlur={handleSave}
+          className="bg-surface-container w-full border-2 border-primary rounded-lg px-3 py-1.5 text-lg font-semibold outline-none shadow-sm animate-pop"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className="group flex items-center justify-start cursor-pointer py-1 px-1 rounded-xl border-2 border-transparent hover:bg-surface-container-low animate-pop"
+    >
+      <span className={`text-lg font-semibold tracking-tight ${!value && placeholder ? 'text-on-surface-variant/50 italic' : 'text-on-surface'}`}>
+        {value || placeholder || ''}
+      </span>
+      <Pencil
+        size={16}
+        className="text-on-surface-variant opacity-100 group-hover:opacity-100 ml-2"
+      />
+    </div>
+  );
+};
+
+const Logo: React.FC = () => {
+  /* --- RENDER --- */
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-1 h-10 bg-primary rounded-xl flex items-center justify-center text-white" />
+      <div>
+        <h1 className="text-lg font-bold text-primary uppercase tracking-widest leading-none mb-1">{APP_NAME}</h1>
+        <p className="text-[0.65rem] text-on-surface-variant font-medium">Le bar, c'est mieux maintenant</p>
+      </div>
+    </div>
+  );
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, setIsOpen }) => {
+  /* --- HOOKS & STATE --- */
+  const navItems = [
+    { id: SIDEBAR_IDS.SHOPPING_LIST_NAME, icon: <ScrollText size={20} />, label: SHOPPING_LIST_NAME },
+    { id: SIDEBAR_IDS.RECIPES_NAME, icon: <Utensils size={20} />, label: RECIPES_NAME },
+    { id: SIDEBAR_IDS.PRODUCTS_NAME, icon: <AppleIcon size={20} />, label: PRODUCTS_NAME },
+    { id: SIDEBAR_IDS.PLANNING_NAME, icon: <Calendar size={20} />, label: PLANNING_NAME },
+  ];
+
+  /* --- RENDER --- */
+  return (
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsOpen(false)}
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      <aside
+        className={`
+        fixed left-0 top-0 h-screen w-64 z-50 bg-surface-container-low border-r border-outline-variant/15 flex flex-col py-4 transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
+        lg:translate-x-0 overflow-auto
+      `}
+      >
+        <div className="px-4 mb-10">
+          <Logo />
+        </div>
+
+        <nav className="flex-1 space-y-1">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setView(item.id as ViewType);
+                setIsOpen(false);
+              }}
+              className={`w-full group flex items-center py-3 px-6 transition-all relative text-left ${
+                currentView === item.id
+                  ? 'text-primary font-semibold bg-white/50'
+                  : 'text-on-surface-variant hover:bg-surface-container-high/50'
+              }`}
+            >
+              {currentView === item.id && (
+                <motion.div layoutId="activeNav" className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+              )}
+              <span className={`mr-4 ${currentView === item.id ? 'text-primary' : 'text-on-surface-variant group-hover:text-primary'}`}>
+                {item.icon}
+              </span>
+              <span className="text-sm tracking-wide">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-auto px-6">
+          <a href="#" className="flex items-center py-2 text-tertiary font-medium text-sm">
+            <LogOut size={18} className="mr-3" /> Déconnexion
+          </a>
+        </div>
+      </aside>
+    </>
+  );
+};
+
+const InlineQuantityInput: React.FC<InlineQuantityInputProps> = ({ quantity, unit, onSave }) => {
+  /* --- HOOKS & STATE --- */
   const [val, setVal] = useState<string>(String(Math.round(quantity)));
 
   useEffect(() => {
     setVal(String(Math.round(quantity)));
   }, [quantity]);
 
+  /* --- HANDLERS --- */
   const handleBlur = () => {
     const parsed = parseInt(val, 10);
     if (!isNaN(parsed) && parsed >= 0 && parsed !== Math.round(quantity)) {
@@ -517,6 +473,7 @@ const InlineQuantityInput: React.FC<{
     }
   };
 
+  /* --- RENDER --- */
   return (
     <div
       className="flex items-center justify-end gap-1.5"
@@ -542,24 +499,7 @@ const InlineQuantityInput: React.FC<{
   );
 };
 
-const ShoppingRow: React.FC<{
-  list: APIShoppingList;
-  isOpen: boolean;
-  onToggleOpen: () => void;
-  onDelete: (id: number, e: React.MouseEvent) => void;
-  onToggleItem: (listId: number, ingredientId: number, currentBought: boolean) => void;
-  onUpdateQuantity: (listId: number, ingredientId: number, newQuantity: number) => void;
-  onUpdatePlannedDate?: (listId: number, newDate: string) => Promise<void>;
-  onAddItem: (payload: {
-    shopping_list_id: number;
-    ingredient_id: number;
-    quantity: number;
-    bought: boolean;
-  }) => Promise<boolean>;
-  onResync: (list: APIShoppingList) => void;
-  isSyncing: boolean;
-  availableIngredients: AvailableIngredient[];
-}> = ({
+const ShoppingRow: React.FC<ShoppingRowProps> = ({
   list,
   isOpen,
   onToggleOpen,
@@ -572,6 +512,7 @@ const ShoppingRow: React.FC<{
   isSyncing,
   availableIngredients,
 }) => {
+  /* --- HOOKS & STATE --- */
   const items = list.shopping_items || [];
   const boughtCount = items.filter((i) => i.bought).length;
 
@@ -593,13 +534,6 @@ const ShoppingRow: React.FC<{
     setEditDateVal(list.shopping_date || '');
   }, [list.shopping_date]);
 
-  const handleSaveDate = async () => {
-    setIsEditingDate(false);
-    if (editDateVal && editDateVal !== list.shopping_date && onUpdatePlannedDate) {
-      await onUpdatePlannedDate(list.id, editDateVal);
-    }
-  };
-
   const selectedIngredient = availableIngredients.find(
     (i) => i.id === Number(selectedIngredientId)
   );
@@ -607,6 +541,14 @@ const ShoppingRow: React.FC<{
   const sortedIngredients = useMemo(() => {
     return [...availableIngredients].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   }, [availableIngredients]);
+
+  /* --- HANDLERS --- */
+  const handleSaveDate = async () => {
+    setIsEditingDate(false);
+    if (editDateVal && editDateVal !== list.shopping_date && onUpdatePlannedDate) {
+      await onUpdatePlannedDate(list.id, editDateVal);
+    }
+  };
 
   const handleAddItemSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -633,6 +575,7 @@ const ShoppingRow: React.FC<{
     }
   };
 
+  /* --- RENDER --- */
   return (
     <>
       <tr
@@ -820,7 +763,7 @@ const ShoppingRow: React.FC<{
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-outline-variant">
-                            <th className="w-10 px-4 py-2"></th>
+                            <th className="w-10 px-4 py-2" />
                             <th className="px-4 py-2 text-[0.6rem] uppercase font-bold tracking-[0.15em] text-on-surface-variant/70">
                               Article
                             </th>
@@ -890,7 +833,6 @@ const ShoppingRow: React.FC<{
                       </table>
                     )}
 
-                    {/* Formulaire d'ajout manuel d'article */}
                     <form
                       onSubmit={handleAddItemSubmit}
                       onClick={(e) => e.stopPropagation()}
@@ -952,7 +894,8 @@ const ShoppingRow: React.FC<{
   );
 };
 
-const ShoppingListViewv2 = () => {
+const ShoppingListViewv2: React.FC = () => {
+  /* --- HOOKS & STATE --- */
   const [shoppingLists, setShoppingLists] = useState<APIShoppingList[]>([]);
   const [availableIngredients, setAvailableIngredients] = useState<AvailableIngredient[]>([]);
   const [expandedListId, setExpandedListId] = useState<number | null>(null);
@@ -964,6 +907,20 @@ const ShoppingListViewv2 = () => {
   const [filterTab, setFilterTab] = useState<'all' | 'today' | 'upcoming' | 'past_completed'>('all');
   const [isGenerating, setIsGenerating] = useState(false);
   const [syncingListId, setSyncingListId] = useState<number | null>(null);
+
+  /* --- HANDLERS --- */
+  const fetchListDetails = async (listId: number) => {
+    try {
+      const res = await sendAPIGET(`shopping_lists/${listId}`);
+      if (!res.ok) return;
+      const data: APIShoppingList = await res.json();
+      setShoppingLists((prev) =>
+        prev.map((l) => (l.id === listId ? { ...l, ...data } : l))
+      );
+    } catch (err) {
+      console.error(`Error fetching shopping list details ${listId}:`, err);
+    }
+  };
 
   const loadShoppingLists = async (selectedId?: number) => {
     setIsLoading(true);
@@ -998,7 +955,7 @@ const ShoppingListViewv2 = () => {
               };
             }
           } catch {
-            // fallback
+            // fallback handled below
           }
           return {
             id: it.id ?? 0,
@@ -1010,7 +967,6 @@ const ShoppingListViewv2 = () => {
         })
       );
 
-      // Tri principal par date prévisionnelle (plannedDate / shopping_date) décroissante
       mapped.sort((a, b) => {
         const dateA = a.shopping_date ? new Date(a.shopping_date).getTime() : 0;
         const dateB = b.shopping_date ? new Date(b.shopping_date).getTime() : 0;
@@ -1046,19 +1002,6 @@ const ShoppingListViewv2 = () => {
     }
   };
 
-  const fetchListDetails = async (listId: number) => {
-    try {
-      const res = await sendAPIGET(`shopping_lists/${listId}`);
-      if (!res.ok) return;
-      const data: APIShoppingList = await res.json();
-      setShoppingLists((prev) =>
-        prev.map((l) => (l.id === listId ? { ...l, ...data } : l))
-      );
-    } catch (err) {
-      console.error(`Error fetching shopping list details ${listId}:`, err);
-    }
-  };
-
   useEffect(() => {
     loadShoppingLists();
     loadIngredients();
@@ -1069,10 +1012,7 @@ const ShoppingListViewv2 = () => {
     const todayStr = getTodayDateString();
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 6);
-    const nextWeekYear = nextWeek.getFullYear();
-    const nextWeekMonth = String(nextWeek.getMonth() + 1).padStart(2, '0');
-    const nextWeekDay = String(nextWeek.getDate()).padStart(2, '0');
-    const nextWeekStr = `${nextWeekYear}-${nextWeekMonth}-${nextWeekDay}`;
+    const nextWeekStr = formatDateISO(nextWeek);
 
     setPlannedDate(todayStr);
     setRangeBegin(todayStr);
@@ -1162,49 +1102,20 @@ const ShoppingListViewv2 = () => {
     }
   };
 
-  // The core Resync Logic function
   const handleResyncList = async (list: APIShoppingList) => {
     if (!list.range_begin || !list.range_end) {
       alert("Impossible de réactualiser : cette liste n'a pas de période définie.");
       return;
     }
     setSyncingListId(list.id);
-    
+
     try {
-      // 1. Fetch updated meal productions
-      const prodRes = await sendAPIGET(`meal_productions/?after=${list.range_begin}&before=${list.range_end}`);
-      if (!prodRes.ok) throw new Error("Erreur lors de la récupération des productions.");
-      const productions: any[] = await prodRes.json();
+      const expectedTotals = await aggregateIngredientsForRange(list.range_begin, list.range_end);
 
-      // 2. Calculate expected totals based on updated schedule
-      const expectedTotals: Record<number, number> = {};
-      const mealCache: Record<number, any> = {};
-
-      for (const prod of productions) {
-        const mealId = prod.meal_id;
-        if (!mealCache[mealId]) {
-          const mealRes = await sendAPIGET(`meals/${mealId}`);
-          if (mealRes.ok) {
-            mealCache[mealId] = await mealRes.json();
-          }
-        }
-        const meal = mealCache[mealId];
-        if (meal && Array.isArray(meal.recipe_items)) {
-          for (const rItem of meal.recipe_items) {
-            const ingId = rItem.ingredient_id ?? rItem.ingredient?.id;
-            if (ingId) {
-              const qty = (rItem.quantity ?? 0) * (prod.quantity ?? 0);
-              expectedTotals[ingId] = (expectedTotals[ingId] || 0) + qty;
-            }
-          }
-        }
-      }
-
-      // 3. Compare with current items in the shopping list
       const detailRes = await sendAPIGET(`shopping_lists/${list.id}`);
-      let currentItems: APIShoppingItem[] = detailRes.ok ? (await detailRes.json()).shopping_items || [] : list.shopping_items || [];
+      const currentItems: APIShoppingItem[] = detailRes.ok ? (await detailRes.json()).shopping_items || [] : list.shopping_items || [];
       const existingItemsByIngId: Record<number, APIShoppingItem> = {};
-      
+
       currentItems.forEach((it) => {
         existingItemsByIngId[it.ingredient_id] = it;
       });
@@ -1214,7 +1125,6 @@ const ShoppingListViewv2 = () => {
         const existingItem = existingItemsByIngId[ingId];
 
         if (!existingItem) {
-          // NOT in the list yet -> Create it
           await sendAPIPOST(`shopping_lists/${list.id}/items`, {
             shopping_list_id: list.id,
             ingredient_id: ingId,
@@ -1222,14 +1132,12 @@ const ShoppingListViewv2 = () => {
             bought: false,
           });
         } else if (!existingItem.bought) {
-          // Exists but UNBOUGHT -> Update strictly to new target quantity
           if (existingItem.quantity !== newTotal) {
             await sendAPIPUT(`shopping_lists/${list.id}/items/${ingId}`, {
               quantity: newTotal,
             });
           }
         } else {
-          // Exists and is BOUGHT -> Keep untouched. Add delta entry if required is higher
           if (newTotal > existingItem.quantity) {
             const remainingQty = newTotal - existingItem.quantity;
             try {
@@ -1240,14 +1148,12 @@ const ShoppingListViewv2 = () => {
                 bought: false,
               });
             } catch (err) {
-              // Fallback in case unique database constraint prevents duplicate items for identical ingredients
-              console.warn(`Impossible de créer une entrée delta pour l'item ${ingId}, tentative de fallback :`, err);
+              console.warn(`Impossible de créer une entrée delta pour l'item ${ingId}:`, err);
             }
           }
         }
       }
 
-      // 4. Refresh List data
       await fetchListDetails(list.id);
     } catch (err: any) {
       console.error('Erreur lors de la synchronisation de la liste:', err);
@@ -1273,30 +1179,7 @@ const ShoppingListViewv2 = () => {
 
     setIsGenerating(true);
     try {
-      const prodRes = await sendAPIGET(`meal_productions/?after=${rangeBegin}&before=${rangeEnd}`);
-      if (!prodRes.ok) throw new Error("Erreur récupération productions");
-      const productions: any[] = await prodRes.json();
-
-      const aggregatedIngredients: Record<number, number> = {};
-      const mealCache: Record<number, any> = {};
-
-      for (const prod of productions) {
-        const mealId = prod.meal_id;
-        if (!mealCache[mealId]) {
-          const mealRes = await sendAPIGET(`meals/${mealId}`);
-          if (mealRes.ok) mealCache[mealId] = await mealRes.json();
-        }
-        const meal = mealCache[mealId];
-        if (meal && Array.isArray(meal.recipe_items)) {
-          for (const rItem of meal.recipe_items) {
-            const ingId = rItem.ingredient_id ?? rItem.ingredient?.id;
-            if (ingId) {
-              const qty = (rItem.quantity ?? 0) * (prod.quantity ?? 0);
-              aggregatedIngredients[ingId] = (aggregatedIngredients[ingId] || 0) + qty;
-            }
-          }
-        }
-      }
+      const aggregatedIngredients = await aggregateIngredientsForRange(rangeBegin, rangeEnd);
 
       const createListPayload = {
         shopping_date: plannedDate,
@@ -1305,8 +1188,8 @@ const ShoppingListViewv2 = () => {
       };
 
       const createListRes = await sendAPIPOST('shopping_lists/', createListPayload);
-      if (!createListRes.ok) throw new Error("Erreur création liste");
-      
+      if (!createListRes.ok) throw new Error('Erreur création liste');
+
       const createdList: APIShoppingList = await createListRes.json();
       const listId = createdList.id;
 
@@ -1335,7 +1218,6 @@ const ShoppingListViewv2 = () => {
     }
   };
 
-  // Filtrage selon la date prévisionnelle et l'état
   const filteredShoppingLists = useMemo(() => {
     const todayStr = getTodayDateString();
     return shoppingLists.filter((list) => {
@@ -1362,6 +1244,7 @@ const ShoppingListViewv2 = () => {
     return shoppingLists.filter((l) => l.shopping_date === todayStr).length;
   }, [shoppingLists]);
 
+  /* --- RENDER --- */
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1391,7 +1274,6 @@ const ShoppingListViewv2 = () => {
           </button>
         </div>
 
-        {/* Filtres par date prévisionnelle & statut */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <button
             type="button"
@@ -1439,7 +1321,6 @@ const ShoppingListViewv2 = () => {
           </button>
         </div>
 
-        {/* Table */}
         <div className="rounded-t-lg bg-surface-container-high border-outline-variant/50 overflow-hidden">
           <table className="w-full table-auto md:table-fixed">
             <thead>
@@ -1494,13 +1375,11 @@ const ShoppingListViewv2 = () => {
           </table>
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between rounded-b-lg border-outline-variant/50 text-xs text-on-surface-variant">
           <span>Cliquez sur une ligne pour afficher ou masquer le détail des articles. Survolez la date pour la modifier.</span>
         </div>
       </section>
 
-      {/* Modal Génération de liste */}
       <AnimatePresence>
         {showGenerateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -1604,91 +1483,8 @@ const ShoppingListViewv2 = () => {
   );
 };
 
-const ShoppingListView = () => {
-  // TODO chargement dynamique de la liste et disponibilité des boutons
-  return (
-
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-8"
-    >
-      <div className="flex items-end justify-between mb-12">
-        <div>
-          <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">{SHOPPING_LIST_NAME}</h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-[repeat(auto-fit,minmax(400px,1fr))]">
-        <div className="w-full">
-          <ShoppingListTable />
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-const ShoppingListTable = () => {
-  // TODO ajouter chargement dynamique des dates
-  return (
-    <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(25,28,30,0.04)]">
-      <div className="px-6 py-4 border-b border-outline-variant/10 flex items-center justify-between">
-        <h3 className="font-semibold text-on-surface">Liste du xx/xx</h3>
-        <span className="text-xs text-on-surface-variant font-medium">14 produits</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-surface-container-low/50">
-              <th className="px-6 py-4 text-[0.65rem] uppercase font-bold tracking-widest text-on-surface-variant">Date de la liste de courses</th>
-              {/* Autres infos de la liste de course */}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-outline-variant/5">
-            {/* Affichage des éléments de l'inventaire à remplacer par la liste des listes de course (table principale)*/}
-            {/* {SHOPPING_DATA.map((item) => (
-              <tr key={item.id} className="hover:bg-surface-container-low transition-colors group cursor-pointer">
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium text-sm text-on-surface">{item.name}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-5 text-right tabular-nums text-sm text-on-surface">
-                  €{item.price.toFixed(2)} <span className="text-[10px] text-on-surface-variant">/{item.unit}</span>
-                </td>
-                <td className={`px-4 py-5 text-right tabular-nums text-sm `}>
-                  {item.quantity} <span className="text-[10px] text-on-surface-variant">{item.quantityUnit}</span>
-                </td>
-                <td className="px-4 py-5">
-                  <span className="text-xs py-1 px-2.5 bg-surface-container-high rounded text-on-surface-variant font-medium">{item.shelf}</span>
-                </td>
-                <td className="px-4 py-5 text-sm text-on-surface-variant">{item.brand}</td>
-                <td className="px-6 py-5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${item.stock === 'Oui' ? 'bg-primary/10 text-primary' : 'bg-tertiary/10 text-tertiary'
-                    }`}>
-                    {item.stock}
-                  </span>
-                </td>
-              </tr>
-            ))} */}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-6 py-4 bg-surface-container-low/30 border-t border-outline-variant/10 flex items-center justify-between">
-        <button className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Previous</button>
-        <div className="flex gap-2">
-          <span className="w-6 h-6 flex items-center justify-center bg-primary text-on-primary text-[10px] font-bold rounded">1</span>
-          <span className="w-6 h-6 flex items-center justify-center text-on-surface-variant text-[10px] font-bold hover:bg-surface-container-high rounded cursor-pointer transition-colors">2</span>
-          <span className="w-6 h-6 flex items-center justify-center text-on-surface-variant text-[10px] font-bold hover:bg-surface-container-high rounded cursor-pointer transition-colors">3</span>
-        </div>
-        <button className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Next</button>
-      </div>
-    </div>
-  );
-};
-
-const RecipeCreatorView = () => {
+const RecipeCreatorView: React.FC = () => {
+  /* --- HOOKS & STATE --- */
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [selectedMeal, setSelectedMeal] = useState<Meal>({
@@ -1702,7 +1498,7 @@ const RecipeCreatorView = () => {
   const [persistedItemIngredientIds, setPersistedItemIngredientIds] = useState<Record<number, Set<number>>>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  // Charge la liste des ingrédients depuis l'API
+  /* --- HANDLERS --- */
   const loadIngredients = async () => {
     try {
       const res = await sendAPIGET('ingredients/');
@@ -1729,7 +1525,6 @@ const RecipeCreatorView = () => {
     }
   };
 
-  // Charge la recette pour un repas donné
   const loadRecipeForMeal = async (mealId: number) => {
     if (!mealId || mealId <= 0) return;
     try {
@@ -1768,7 +1563,6 @@ const RecipeCreatorView = () => {
     }
   };
 
-  // Charge la liste des repas depuis l'API
   const loadMeals = async (targetMealId?: number) => {
     try {
       const res = await sendAPIGET('meals/');
@@ -1828,13 +1622,11 @@ const RecipeCreatorView = () => {
     loadMeals();
   }, []);
 
-  // Dérivation directe de la recette active
   const selectedRecipe = recipes.find((r) => r.meal_id === (selectedMeal?.id ?? 0)) || {
     meal_id: selectedMeal?.id ?? 0,
     items: [],
   };
 
-  // Sélection d'un repas depuis le dropdown
   const handleSelectMeal = (mealId: number) => {
     if (mealId === 0) {
       setSelectedMeal({
@@ -1857,7 +1649,6 @@ const RecipeCreatorView = () => {
     }
   };
 
-  // Mise à jour locale du nom de la recette
   const handleNameChange = (newName: string) => {
     const updatedName = newName.trim() || "Nom de la recette";
     setSelectedMeal((prev) =>
@@ -1872,7 +1663,6 @@ const RecipeCreatorView = () => {
     }
   };
 
-  // Mise à jour locale du statut Veggie
   const handleVeggyToggle = (isVeggy: boolean) => {
     setSelectedMeal((prev) =>
       prev
@@ -1886,7 +1676,6 @@ const RecipeCreatorView = () => {
     }
   };
 
-  // Ajout d'un ingrédient à la recette
   const addRecipeItem = () => {
     const defaultIngredient = ingredients.length > 0
       ? ingredients[0]
@@ -1911,7 +1700,6 @@ const RecipeCreatorView = () => {
     });
   };
 
-  // Changement d'ingrédient pour un item
   const handleIngredientChange = (itemIndex: number, newIngredientId: number) => {
     const newIng = ingredients.find((i) => i.id === newIngredientId);
     if (!newIng) return;
@@ -1930,7 +1718,6 @@ const RecipeCreatorView = () => {
     );
   };
 
-  // Changement de la quantité d'un item
   const handleQuantityChange = (itemIndex: number, newQuantity: number) => {
     const currentMealId = selectedMeal?.id ?? 0;
     setRecipes((prev) =>
@@ -1946,7 +1733,6 @@ const RecipeCreatorView = () => {
     );
   };
 
-  // Suppression d'un ingrédient (API si persisté, local si non persisté)
   const handleDeleteItem = async (itemIndex: number, item: RecipeItem) => {
     const currentMealId = selectedMeal?.id ?? 0;
     const isPersisted =
@@ -1988,7 +1774,6 @@ const RecipeCreatorView = () => {
     );
   };
 
-  // Suppression du repas (DELETE /meals/{meal_id})
   const handleDeleteMeal = async () => {
     if (!selectedMeal || selectedMeal.id <= 0) return;
     try {
@@ -2030,7 +1815,6 @@ const RecipeCreatorView = () => {
     }
   };
 
-  // Sauvegarde globale du plat (POST si id == 0, PUT si id > 0) et de ses ingrédients
   const handleSaveMeal = async () => {
     setIsSaving(true);
     try {
@@ -2147,6 +1931,7 @@ const RecipeCreatorView = () => {
     }
   };
 
+  /* --- RENDER --- */
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -2216,7 +2001,7 @@ const RecipeCreatorView = () => {
                   after:w-4 
                   after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.4,0,0.2,1)]
                   peer-checked:after:translate-x-5"
-              ></div>
+              />
             </label>
           </div>
 
@@ -2332,7 +2117,8 @@ const RecipeCreatorView = () => {
   );
 };
 
-const ProductsView = () => {
+const ProductsView: React.FC = () => {
+  /* --- HOOKS & STATE --- */
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [persistedIngredients, setPersistedIngredients] = useState<Ingredient[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -2343,113 +2129,7 @@ const ProductsView = () => {
     return ingredients.some((ing) => ing.id === 0);
   }, [ingredients]);
 
-  const addIngredient = () => {
-    if (hasUnsavedCard) return;
-    setIngredients((prev) => [
-      ...prev,
-      { id: 0, name: '', brand: 0, shelf: 0, unit: 'unité', note: '' },
-    ]);
-  };
-
-  const updateIngredientField = (
-    id: number,
-    field: keyof Ingredient,
-    value: any
-  ) => {
-    setIngredients((prev) =>
-      prev.map((ing) => (ing.id === id ? { ...ing, [field]: value } : ing))
-    );
-  };
-
-  const isIngredientDirty = (ing: Ingredient): boolean => {
-    if (ing.id === 0) return true;
-    const persisted = persistedIngredients.find((p) => p.id === ing.id);
-    if (!persisted) return true;
-    return (
-      ing.name.trim() !== persisted.name.trim() ||
-      ing.unit.trim() !== persisted.unit.trim() ||
-      ing.brand !== persisted.brand ||
-      ing.shelf !== persisted.shelf ||
-      (ing.note ?? '').trim() !== (persisted.note ?? '').trim()
-    );
-  };
-
-  const handleSaveIngredient = async (ing: Ingredient) => {
-    const payload = {
-      name: ing.name,
-      unit: ing.unit,
-      remark: ing.note || '',
-      shelf_id: ing.shelf > 0 ? ing.shelf : null,
-      brand_id: ing.brand > 0 ? ing.brand : null,
-    };
-
-    try {
-      let res: Response;
-      if (ing.id === 0) {
-        res = await sendAPIPOST('ingredients/', payload);
-      } else {
-        res = await sendAPIPUT(`ingredients/${ing.id}`, payload);
-      }
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('Failed to save ingredient:', res.status, errorText);
-        alert(`Erreur lors de la sauvegarde (${res.status})`);
-        return;
-      }
-
-      const savedData = await res.json();
-      const updatedIngredient: Ingredient = {
-        id: savedData.id,
-        name: savedData.name ?? '',
-        unit: savedData.unit ?? 'unité',
-        note: savedData.remark ?? savedData.note ?? '',
-        brand: savedData.brand?.id ?? savedData.brand_id ?? 0,
-        shelf: savedData.shelf?.id ?? savedData.shelf_id ?? 0,
-      };
-
-      setIngredients((prev) =>
-        prev.map((item) => (item.id === ing.id ? updatedIngredient : item))
-      );
-
-      setPersistedIngredients((prev) => {
-        const exists = prev.some((p) => p.id === updatedIngredient.id);
-        if (exists) {
-          return prev.map((p) => (p.id === updatedIngredient.id ? updatedIngredient : p));
-        } else {
-          return [...prev, updatedIngredient];
-        }
-      });
-    } catch (err) {
-      console.error('Error saving ingredient:', err);
-    }
-  };
-
-  const handleDeleteIngredient = async (id: number) => {
-    if (id === 0) {
-      setIngredients((prev) => prev.filter((ing) => ing.id !== 0));
-      return;
-    }
-
-    try {
-      const res = await sendAPIDELETE(`ingredients/${id}`);
-      if (res.ok || res.status === 204) {
-        setIngredients((prev) => prev.filter((ing) => ing.id !== id));
-        setPersistedIngredients((prev) => prev.filter((ing) => ing.id !== id));
-      } else {
-        const errorText = await res.text();
-        console.error(`Failed to delete ingredient ${id}:`, res.status, errorText);
-        if (res.status === 422) {
-          alert('Impossible de supprimer cet ingrédient car il est utilisé dans des recettes ou des listes de courses.');
-        } else {
-          alert(`Erreur lors de la suppression (${res.status})`);
-        }
-      }
-    } catch (err) {
-      console.error(`Error deleting ingredient ${id}:`, err);
-    }
-  };
-
+  /* --- HANDLERS --- */
   const loadIngredients = async () => {
     try {
       const res = await sendAPIGET('ingredients/');
@@ -2539,12 +2219,107 @@ const ProductsView = () => {
     loadShelves();
   }, []);
 
+  const addIngredient = () => {
+    if (hasUnsavedCard) return;
+    setIngredients((prev) => [
+      ...prev,
+      { id: 0, name: '', brand: 0, shelf: 0, unit: 'unité', note: '' },
+    ]);
+  };
+
+  const updateIngredientField = (
+    id: number,
+    field: keyof Ingredient,
+    value: any
+  ) => {
+    setIngredients((prev) =>
+      prev.map((ing) => (ing.id === id ? { ...ing, [field]: value } : ing))
+    );
+  };
+
+  const handleSaveIngredient = async (ing: Ingredient) => {
+    const payload = {
+      name: ing.name,
+      unit: ing.unit,
+      remark: ing.note || '',
+      shelf_id: ing.shelf > 0 ? ing.shelf : null,
+      brand_id: ing.brand > 0 ? ing.brand : null,
+    };
+
+    try {
+      let res: Response;
+      if (ing.id === 0) {
+        res = await sendAPIPOST('ingredients/', payload);
+      } else {
+        res = await sendAPIPUT(`ingredients/${ing.id}`, payload);
+      }
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Failed to save ingredient:', res.status, errorText);
+        alert(`Erreur lors de la sauvegarde (${res.status})`);
+        return;
+      }
+
+      const savedData = await res.json();
+      const updatedIngredient: Ingredient = {
+        id: savedData.id,
+        name: savedData.name ?? '',
+        unit: savedData.unit ?? 'unité',
+        note: savedData.remark ?? savedData.note ?? '',
+        brand: savedData.brand?.id ?? savedData.brand_id ?? 0,
+        shelf: savedData.shelf?.id ?? savedData.shelf_id ?? 0,
+      };
+
+      setIngredients((prev) =>
+        prev.map((item) => (item.id === ing.id ? updatedIngredient : item))
+      );
+
+      setPersistedIngredients((prev) => {
+        const exists = prev.some((p) => p.id === updatedIngredient.id);
+        if (exists) {
+          return prev.map((p) => (p.id === updatedIngredient.id ? updatedIngredient : p));
+        } else {
+          return [...prev, updatedIngredient];
+        }
+      });
+    } catch (err) {
+      console.error('Error saving ingredient:', err);
+    }
+  };
+
+  const handleDeleteIngredient = async (id: number) => {
+    if (id === 0) {
+      setIngredients((prev) => prev.filter((ing) => ing.id !== 0));
+      return;
+    }
+
+    try {
+      const res = await sendAPIDELETE(`ingredients/${id}`);
+      if (res.ok || res.status === 204) {
+        setIngredients((prev) => prev.filter((ing) => ing.id !== id));
+        setPersistedIngredients((prev) => prev.filter((ing) => ing.id !== id));
+      } else {
+        const errorText = await res.text();
+        console.error(`Failed to delete ingredient ${id}:`, res.status, errorText);
+        if (res.status === 422) {
+          alert('Impossible de supprimer cet ingrédient car il est utilisé dans des recettes ou des listes de courses.');
+        } else {
+          alert(`Erreur lors de la suppression (${res.status})`);
+        }
+      }
+    } catch (err) {
+      console.error(`Error deleting ingredient ${id}:`, err);
+    }
+  };
+
   const filteredIngredients = ingredients.filter(
     (ing) =>
       ing.id === 0 ||
       ing.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  /* --- RENDER --- */
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -2571,7 +2346,7 @@ const ProductsView = () => {
         <div className="flex-col space-y-4">
           <AnimatePresence initial={false}>
             {filteredIngredients.map((ingredient: Ingredient) => {
-              const isDirty = isIngredientDirty(ingredient);
+              const isDirty = isIngredientDirty(ingredient, persistedIngredients);
               return (
                 <motion.div
                   key={ingredient.id}
@@ -2704,286 +2479,17 @@ const ProductsView = () => {
   );
 };
 
-const ArticlesView = () => {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [selectedMealId, setSelectedMealId] = useState<number>(0);
-
-  // Charge la liste des recettes depuis l'API
-  const loadRecipes = async () => {
-    try {
-      const res = await sendAPIGET('recipes/');
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to fetch recipes: ${res.status} ${text}`);
-      }
-
-      const json = await res.json();
-      if (!Array.isArray(json)) {
-        console.warn('Unexpected recipes response:', json);
-        return;
-      }
-
-      const mapped: Recipe[] = json.map((it: any) => ({
-        meal_id: it.meal_id ?? 0,
-        items: Array.isArray(it.items)
-          ? it.items.map((item: any) => ({
-              quantity: item.quantity ?? 0,
-              ingredient: {
-                id: item.ingredient?.id ?? 0,
-                name: item.ingredient?.name ?? '',
-                unit: item.ingredient?.unit ?? '',
-                note: item.ingredient?.remark ?? '',
-                brand: item.ingredient?.brand_id ?? 0,
-                shelf: item.ingredient?.shelf_id ?? 0,
-              },
-            }))
-          : [],
-      }));
-
-      setRecipes(mapped);
-
-      // Met à jour l'ID sélectionné par défaut une fois les recettes chargées
-      if (mapped.length > 0 && mapped[0].meal_id) {
-        setSelectedMealId(mapped[0].meal_id);
-      }
-    } catch (err) {
-      console.error('Error loading recipes', err);
-    }
-  };
-
-  // Charge la liste des repas depuis l'API
-  const loadMeals = async () => {
-    try {
-      const res = await sendAPIGET('meals/');
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to fetch meals: ${res.status} ${text}`);
-      }
-
-      const json = await res.json();
-      if (!Array.isArray(json)) return;
-
-      const mapped: Meal[] = json.map((it: any) => ({
-        id: it.id ?? 0,
-        name: it.name ?? '',
-        veggy: Boolean(it.veggy),
-        meal_productions: Array.isArray(it.meal_productions) ? (it.meal_productions as MealProduction[]) : [],
-        recipe_items: [],
-      }));
-
-      setMeals(mapped);
-    } catch (err) {
-      console.error('Error loading meals', err);
-    }
-  };
-
-  useEffect(() => {
-    loadRecipes();
-    loadMeals();
-  }, []);
-
-  // Dérivation directe de la recette active
-  const selectedRecipe = recipes.find((r) => r.meal_id === selectedMealId);
-
-  // Sauvegarde d'un ingrédient de la recette
-  const saveRecipeItem = async (item: RecipeItem) => {
-    try {
-      const payload = {
-        name: item.ingredient.name,
-        unit: item.ingredient.unit,
-        remark: item.ingredient.note,
-        shelf_id: item.ingredient.shelf,
-        brand_id: item.ingredient.brand,
-      };
-
-      const res = await sendAPIPOST('ingredients/', payload);
-      if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
-      return await res.json();
-    } catch (err) {
-      console.error('Error saving ingredient', err);
-    }
-  };
-
-  // Suppression locale d'un ingrédient
-  const removeRecipeItem = (ingredientId: number) => {
-    if (!selectedRecipe) return;
-
-    setRecipes((prevRecipes) =>
-      prevRecipes.map((r) => {
-        if (r.meal_id !== selectedMealId) return r;
-        return {
-          ...r,
-          items: r.items.filter((item) => item.ingredient.id !== ingredientId),
-        };
-      })
-    );
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="max-w-6xl mx-auto w-full"
-    >
-      <header className="mb-12">
-        <h2 className="text-4xl font-medium tracking-tight mb-2">{ARTICLES_NAMES}</h2>
-      </header>
-
-      <div className="p-4 bg-surface-container-lowest rounded-xl shadow-sm h-full flex flex-col gap-4">
-        {/* Select du Meal / Recette */}
-        <div className="relative inline-block w-full">
-          <select
-            value={selectedMealId}
-            onChange={(e) => setSelectedMealId(Number(e.target.value))}
-            className="w-full appearance-none bg-surface-container-low rounded-lg border-none p-2 px-10 text-center [text-align-last:center] text-4xl font-medium tracking-tight text-on-surface cursor-pointer outline-none focus:ring-0"
-          >
-            {recipes.map((recipe) => {
-              const meal = meals.find((m) => m.id === recipe.meal_id);
-              return (
-                <option
-                  key={recipe.meal_id}
-                  value={recipe.meal_id}
-                  className="text-base font-normal text-left"
-                >
-                  {meal ? meal.name : `Recette #${recipe.meal_id}`}
-                </option>
-              );
-            })}
-          </select>
-
-          <ChevronDown
-            size={28}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
-          />
-        </div>
-
-        {/* Liste dynamique des RecipeItems */}
-        <div className="flex-1 space-y-4">
-          <AnimatePresence initial={false}>
-            {!selectedRecipe || selectedRecipe.items.length === 0 ? (
-              <p className="text-center text-on-surface-variant py-8">
-                Aucun ingrédient associé à ce plat.
-              </p>
-            ) : (
-              selectedRecipe.items.map((item) => (
-                <motion.div
-                  key={item.ingredient.id}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="grid grid-cols-12 gap-4 items-end bg-surface-container-low/50 p-4 rounded-lg group overflow-hidden"
-                >
-                  {/* Nom de l'ingrédient */}
-                  <div className="col-span-4">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                      Ingrédient
-                    </label>
-                    <div className="flex-1 min-w-0">
-                      <ClickToEdit
-                        initialValue={item.ingredient.name}
-                        onSave={(newValue) => console.log('Nouveau nom :', newValue)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Association Ingrédient / Produit */}
-                  <div className="col-span-4">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                      Produit / Marque associé
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={item.ingredient.id}
-                        onChange={(e) => console.log('Changer produit vers :', e.target.value)}
-                        className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
-                      >
-                        {products.map((product) => (
-                          <option key={product.id} value={product.id}>
-                            {product.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        size={14}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Sauvegarde */}
-                  <div className="col-span-2 flex justify-end">
-                    <button
-                      onClick={() => saveRecipeItem(item)}
-                      className="px-2 py-2 rounded-lg font-bold text-white signature-gradient shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
-                    >
-                      <Save size={20} />
-                    </button>
-                  </div>
-
-                  {/* Note / Remarque */}
-                  <div className="col-span-4">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                      Note / Remarque
-                    </label>
-                    <div className="flex-1 min-w-0">
-                      <ClickToEdit
-                        initialValue={item.ingredient.note || ''}
-                        onSave={(newValue) => console.log('Nouvelle note :', newValue)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Quantité & Unité */}
-                  <div className="col-span-4">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                      Quantité
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        className="tabular-nums w-full bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-16 outline-none"
-                        type="number"
-                        defaultValue={item.quantity}
-                      />
-                      <span className="absolute right-4 text-xs font-medium text-on-surface-variant">
-                        {item.ingredient.unit}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Suppression */}
-                  <div className="col-span-2 flex justify-end">
-                    <button
-                      onClick={() => removeRecipeItem(item.ingredient.id)}
-                      className="p-3 text-tertiary/40 hover:text-tertiary transition-colors"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-const PlanningView = () => {
+const PlanningView: React.FC = () => {
+  /* --- HOOKS & STATE --- */
   const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 
-  // 1. États
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [mealsList, setMealsList] = useState<Meal[]>([]);
   const [productionsByDate, setProductionsByDate] = useState<Record<string, ProdCard[]>>({});
 
-  // 2. Dates calculées pour la semaine (Lundi à Vendredi)
   const currentWeekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
 
-  // 3. Navigation Semaine
+  /* --- HANDLERS --- */
   const handlePreviousWeek = () => {
     setCurrentDate((prev) => {
       const next = new Date(prev);
@@ -3000,14 +2506,12 @@ const PlanningView = () => {
     });
   };
 
-  // 4. Chargement des repas et des productions de la semaine
   const fetchWeekData = async () => {
     if (!currentWeekDates || currentWeekDates.length < 5) return;
     const mondayDate = currentWeekDates[0];
     const fridayDate = currentWeekDates[4];
 
     try {
-      // a. Récupération de tous les repas pour le dropdown
       const mealsRes = await sendAPIGET('meals/');
       let loadedMeals: Meal[] = [];
       if (mealsRes.ok) {
@@ -3024,7 +2528,6 @@ const PlanningView = () => {
         }
       }
 
-      // b. Récupération des productions planifiées pour la semaine
       const prodRes = await sendAPIGET(
         `meal_productions/?after=${mondayDate}&before=${fridayDate}`
       );
@@ -3064,7 +2567,6 @@ const PlanningView = () => {
     fetchWeekData();
   }, [currentWeekDates]);
 
-  // 5. Création d'une Meal Production (addCard)
   const addCard = async (dateStr: string) => {
     if (mealsList.length === 0) {
       alert("Aucun plat disponible. Créez d'abord des recettes dans l'onglet Recettes.");
@@ -3103,9 +2605,7 @@ const PlanningView = () => {
     }
   };
 
-  // 6. Suppression d'une Meal Production (removeMeal)
   const removeMeal = async (dateStr: string, productionId: number) => {
-    // Mise à jour optimiste
     setProductionsByDate((prev) => ({
       ...prev,
       [dateStr]: (prev[dateStr] || []).filter(
@@ -3128,7 +2628,6 @@ const PlanningView = () => {
     }
   };
 
-  // 7. Modification du Plat (handleMealChange)
   const handleMealChange = async (
     dateStr: string,
     productionId: number,
@@ -3137,7 +2636,6 @@ const PlanningView = () => {
     const targetMeal = mealsList.find((m) => m.id === newMealId);
     if (!targetMeal) return;
 
-    // Mise à jour optimiste
     setProductionsByDate((prev) => ({
       ...prev,
       [dateStr]: (prev[dateStr] || []).map((card) =>
@@ -3162,13 +2660,11 @@ const PlanningView = () => {
     }
   };
 
-  // 8. Modification de la Quantité (handleQuantityChange)
   const handleQuantityChange = async (
     dateStr: string,
     productionId: number,
     newQty: number
   ) => {
-    // Mise à jour optimiste
     setProductionsByDate((prev) => ({
       ...prev,
       [dateStr]: (prev[dateStr] || []).map((card) =>
@@ -3191,6 +2687,7 @@ const PlanningView = () => {
     }
   };
 
+  /* --- RENDER --- */
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -3198,7 +2695,6 @@ const PlanningView = () => {
       exit={{ opacity: 0, y: -20 }}
       className="space-y-8 max-w-[1200px] mx-auto"
     >
-      {/* Header avec Navigation de Semaine */}
       <div className="flex items-end justify-between mb-8">
         <div>
           <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">
@@ -3228,7 +2724,6 @@ const PlanningView = () => {
         </div>
       </div>
 
-      {/* Grille des 5 Jours */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {days.map((dayName, idx) => {
           const dateStr = currentWeekDates[idx];
@@ -3236,7 +2731,6 @@ const PlanningView = () => {
 
           return (
             <div key={dayName} className="flex flex-col gap-4">
-              {/* En-tête du jour */}
               <div className="px-4 py-2 bg-surface-container rounded-t-lg">
                 <h3 className="font-label text-xs font-semibold uppercase tracking-widest text-on-surface-variant">
                   {dayName}
@@ -3246,7 +2740,6 @@ const PlanningView = () => {
                 </p>
               </div>
 
-              {/* Cartes de Production */}
               <AnimatePresence>
                 {dayCards.map((card) => (
                   <motion.div
@@ -3257,7 +2750,6 @@ const PlanningView = () => {
                     className="p-0"
                   >
                     <div className="bg-surface-container-lowest p-3 sm:p-4 rounded-xl shadow-sm border-l-4 border-primary/0 animate-pop">
-                      {/* Select Plat */}
                       <div className="relative mb-3">
                         <select
                           value={card.mealId}
@@ -3278,7 +2770,6 @@ const PlanningView = () => {
                         />
                       </div>
 
-                      {/* Quantité + Poubelle */}
                       <div className="grid grid-cols-1 min-[180px]:grid-cols-[1fr_auto] items-center gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider shrink-0">
@@ -3314,7 +2805,6 @@ const PlanningView = () => {
                 ))}
               </AnimatePresence>
 
-              {/* Bouton Ajouter */}
               <div className="py-0">
                 <button
                   type="button"
@@ -3337,7 +2827,12 @@ const PlanningView = () => {
   );
 };
 
+/* ==========================================================================
+   MAIN COMPONENT
+   ========================================================================== */
+
 export default function App() {
+  /* --- HOOKS & STATE --- */
   const [view, setView] = useState<ViewType>(SIDEBAR_IDS.SHOPPING_LIST_NAME);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -3348,12 +2843,12 @@ export default function App() {
       document.body.style.overflow = 'unset';
     }
 
-    // Nettoyage si le composant est démonté
     return () => {
       document.body.style.overflow = 'unset';
     };
   }, [isSidebarOpen]);
 
+  /* --- RENDER --- */
   return (
     <div className="min-h-screen flex bg-surface">
       <Sidebar
@@ -3364,7 +2859,6 @@ export default function App() {
       />
 
       <main className="flex-1 min-h-screen flex flex-col lg:ml-64 transition-all">
-        {/* Header mobile avec bouton Burger */}
         <header className="flex justify-start h-16 bg-surface-container-low border-b border-outline-variant/15 lg:hidden">
           <button
             onClick={() => setIsSidebarOpen(true)}
@@ -3373,7 +2867,7 @@ export default function App() {
             <Menu size={24} />
           </button>
           <div className="flex items-center gap-3">
-            <Logo></Logo>
+            <Logo />
           </div>
         </header>
 
@@ -3385,8 +2879,6 @@ export default function App() {
               <RecipeCreatorView key={SIDEBAR_IDS.RECIPES_NAME} />
             ) : view === SIDEBAR_IDS.PRODUCTS_NAME ? (
               <ProductsView key={SIDEBAR_IDS.PRODUCTS_NAME} />
-            ) : view === SIDEBAR_IDS.ARTICLES_NAMES ? (
-              <ArticlesView key={SIDEBAR_IDS.ARTICLES_NAMES} />
             ) : (
               <PlanningView key={SIDEBAR_IDS.PLANNING_NAME} />
             )}
