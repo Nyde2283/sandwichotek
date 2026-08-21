@@ -207,6 +207,18 @@ export const getWeekDates = (referenceDate = new Date(), includeWeekend = false)
   return weekDates;
 };
 
+export const getInitialPlanningDate = (referenceDate = new Date()): Date => {
+  const d = new Date(referenceDate);
+  const day = d.getDay();
+  if (day === 0 || day === 6) {
+    const daysUntilNextMonday = day === 0 ? 1 : 2;
+    const nextMonday = new Date(d);
+    nextMonday.setDate(d.getDate() + daysUntilNextMonday);
+    return nextMonday;
+  }
+  return d;
+};
+
 export const isIngredientDirty = (ing: Ingredient, persistedIngredients: Ingredient[]): boolean => {
   if (ing.id === 0) return true;
   const persisted = persistedIngredients.find((p) => p.id === ing.id);
@@ -2483,10 +2495,11 @@ const PlanningView: React.FC = () => {
   /* --- HOOKS & STATE --- */
   const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [currentDate, setCurrentDate] = useState<Date>(() => getInitialPlanningDate());
   const [mealsList, setMealsList] = useState<Meal[]>([]);
   const [productionsByDate, setProductionsByDate] = useState<Record<string, ProdCard[]>>({});
 
+  const todayStr = useMemo(() => getTodayDateString(), []);
   const currentWeekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
 
   /* --- HANDLERS --- */
@@ -2728,16 +2741,63 @@ const PlanningView: React.FC = () => {
         {days.map((dayName, idx) => {
           const dateStr = currentWeekDates[idx];
           const dayCards = productionsByDate[dateStr] || [];
+          const isToday = dateStr === todayStr;
+          const isPast = dateStr < todayStr;
 
           return (
-            <div key={dayName} className="flex flex-col gap-4">
-              <div className="px-4 py-2 bg-surface-container rounded-t-lg">
-                <h3 className="font-label text-xs font-semibold uppercase tracking-widest text-on-surface-variant">
-                  {dayName}
-                </h3>
-                <p className="text-xs text-on-surface-variant/70">
-                  {formatDateHeader(dateStr)}
-                </p>
+            <div
+              key={dayName}
+              className={`flex flex-col gap-4 rounded-xl transition-all ${
+                isToday
+                  ? 'bg-primary/5 p-2 -m-2 border-2 border-primary shadow-xs'
+                  : isPast
+                  ? 'opacity-60 hover:opacity-90 bg-surface-container-low/40 p-2 -m-2 border border-outline-variant/30'
+                  : ''
+              }`}
+            >
+              <div
+                className={`px-3 py-2 rounded-t-lg flex flex-wrap items-center justify-between gap-1 ${
+                  isToday
+                    ? 'bg-primary/10'
+                    : isPast
+                    ? 'bg-surface-container/60'
+                    : 'bg-surface-container'
+                }`}
+              >
+                <div>
+                  <h3
+                    className={`font-label text-xs font-semibold uppercase tracking-widest ${
+                      isToday
+                        ? 'text-primary font-bold'
+                        : isPast
+                        ? 'text-on-surface-variant/70'
+                        : 'text-on-surface-variant'
+                    }`}
+                  >
+                    {dayName}
+                  </h3>
+                  <p
+                    className={`text-xs ${
+                      isToday
+                        ? 'text-primary/80 font-medium'
+                        : isPast
+                        ? 'text-on-surface-variant/50'
+                        : 'text-on-surface-variant/70'
+                    }`}
+                  >
+                    {formatDateHeader(dateStr)}
+                  </p>
+                </div>
+                {isToday && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary text-white shadow-xs">
+                    Aujourd'hui
+                  </span>
+                )}
+                {isPast && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-surface-container text-on-surface-variant/70">
+                    Passé
+                  </span>
+                )}
               </div>
 
               <AnimatePresence>
