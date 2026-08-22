@@ -257,7 +257,6 @@ const parseJwtPayload = (token: string) => {
   return JSON.parse(jsonPayload);
 };
 
-// Vérifie que isTokenValid est bien disponible ici aussi
 const isTokenValid = (token: string): boolean => {
   try {
     const payload = parseJwtPayload(token);
@@ -268,50 +267,48 @@ const isTokenValid = (token: string): boolean => {
   }
 };
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('google_token');
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
 async function sendAPIPOST(route: string, payload: unknown): Promise<Response> {
-  const res = await fetch(`${BASE_API_URL}/${route}`, {
+  return await fetch(`${BASE_API_URL}/${route}`, {
     method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
-  return res;
 }
 
 async function sendAPIGET(route: string): Promise<Response> {
-  const res = await fetch(`${BASE_API_URL}/${route}`, {
+  return await fetch(`${BASE_API_URL}/${route}`, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
   });
-  return res;
 }
 
 async function sendAPIPUT(route: string, payload: unknown): Promise<Response> {
-  const res = await fetch(`${BASE_API_URL}/${route}`, {
+  return await fetch(`${BASE_API_URL}/${route}`, {
     method: 'PUT',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
-  return res;
 }
 
 async function sendAPIDELETE(route: string): Promise<Response> {
-  const res = await fetch(`${BASE_API_URL}/${route}`, {
+  return await fetch(`${BASE_API_URL}/${route}`, {
     method: 'DELETE',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
   });
-  return res;
 }
 
 export const isBrandDirty = (brand: Brand, persistedBrands: Brand[]): boolean => {
