@@ -16,29 +16,41 @@ import {
   Trash2,
   AppleIcon,
   Plus,
+  Tag,
+  Layers,
+  ShoppingCart,
   Save,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 /* ==========================================================================
    TYPES & INTERFACES
    ========================================================================== */
 
-const BASE_API_URL = 'http://localhost:8000';
+const ALLOWED_DOMAIN = "telecomnancy.net";
+
+const API_URL = (window as any).env?.API_URL || 'http://localhost';
+const API_PORT = (window as any).env?.API_PORT || '8000';
+
+export const BASE_API_URL = `${API_URL}:${API_PORT}`;
+
 const APP_NAME = 'Sandwichotek';
 const SHOPPING_LIST_NAME = 'Liste de courses';
 const RECIPES_NAME = 'Recettes';
 const PRODUCTS_NAME = 'Produits';
+const BRANDSANDSHELVES_NAME = 'Marques & Rayons';
 const PLANNING_NAME = 'Planning hebdomadaire';
 
 const SIDEBAR_IDS = {
   SHOPPING_LIST_NAME: 'shoppinglist',
   RECIPES_NAME: 'recipes',
   PRODUCTS_NAME: 'products',
+  BRANDSANDSHELVES_NAME: 'brandsandshelves',
   PLANNING_NAME: 'planning',
 } as const;
 
-type ViewType = 'shoppinglist' | 'recipes' | 'products' | 'planning';
+type ViewType = 'shoppinglist' | 'recipes' | 'products' | 'brandsandshelves' | 'planning';
 
 interface Ingredient {
   id: number;
@@ -134,6 +146,7 @@ interface SidebarProps {
   setView: (v: ViewType) => void;
   isOpen: boolean;
   setIsOpen: (o: boolean) => void;
+  onLogout: () => void;
 }
 
 interface ClickToEditProps {
@@ -232,6 +245,29 @@ export const isIngredientDirty = (ing: Ingredient, persistedIngredients: Ingredi
   );
 };
 
+const parseJwtPayload = (token: string) => {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+  return JSON.parse(jsonPayload);
+};
+
+// Vérifie que isTokenValid est bien disponible ici aussi
+const isTokenValid = (token: string): boolean => {
+  try {
+    const payload = parseJwtPayload(token);
+    if (!payload.exp) return false;
+    return payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+};
+
 async function sendAPIPOST(route: string, payload: unknown): Promise<Response> {
   const res = await fetch(`${BASE_API_URL}/${route}`, {
     method: 'POST',
@@ -277,6 +313,96 @@ async function sendAPIDELETE(route: string): Promise<Response> {
   });
   return res;
 }
+
+export const isBrandDirty = (brand: Brand, persistedBrands: Brand[]): boolean => {
+  if (brand.id === 0) return true;
+  const original = persistedBrands.find((p) => p.id === brand.id);
+  if (!original) return true;
+  return brand.name.trim() !== original.name.trim();
+};
+
+export const isShelfDirty = (shelf: Shelf, persistedShelves: Shelf[]): boolean => {
+  if (shelf.id === 0) return true;
+  const original = persistedShelves.find((p) => p.id === shelf.id);
+  if (!original) return true;
+  return shelf.name.trim() !== original.name.trim();
+};
+
+export const fetchBrandsApi = async (): Promise<Brand[]> => {
+  const res = await sendAPIGET('brands/');
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch brands: ${res.status} ${text}`);
+  }
+  const json = await res.json();
+  if (!Array.isArray(json)) return [];
+  return json.map((it: any) => ({
+    id: it.id ?? 0,
+    name: it.name ?? '',
+    brand: it.brand ?? 0,
+    shelf: it.shelf ?? 0,
+    note: it.note ?? '',
+  }));
+};
+
+export const saveBrandApi = async (brand: Brand): Promise<Brand> => {
+  const payload = { name: brand.name };
+  const res = brand.id === 0
+    ? await sendAPIPOST('brands/', payload)
+    : await sendAPIPUT(`brands/${brand.id}`, payload);
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to save brand (${res.status}): ${text}`);
+  }
+  const json = await res.json();
+  return {
+    id: json.id,
+    name: json.name ?? '',
+    brand: json.brand ?? 0,
+    shelf: json.shelf ?? 0,
+    note: json.note ?? '',
+  };
+};
+
+export const deleteBrandApi = async (id: number): Promise<Response> => {
+  return await sendAPIDELETE(`brands/${id}`);
+};
+
+export const fetchShelvesApi = async (): Promise<Shelf[]> => {
+  const res = await sendAPIGET('shelves/');
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch shelves: ${res.status} ${text}`);
+  }
+  const json = await res.json();
+  if (!Array.isArray(json)) return [];
+  return json.map((it: any) => ({
+    id: it.id ?? 0,
+    name: it.name ?? '',
+  }));
+};
+
+export const saveShelfApi = async (shelf: Shelf): Promise<Shelf> => {
+  const payload = { name: shelf.name };
+  const res = shelf.id === 0
+    ? await sendAPIPOST('shelves/', payload)
+    : await sendAPIPUT(`shelves/${shelf.id}`, payload);
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to save shelf (${res.status}): ${text}`);
+  }
+  const json = await res.json();
+  return {
+    id: json.id,
+    name: json.name ?? '',
+  };
+};
+
+export const deleteShelfApi = async (id: number): Promise<Response> => {
+  return await sendAPIDELETE(`shelves/${id}`);
+};
 
 async function aggregateIngredientsForRange(rangeBegin: string, rangeEnd: string): Promise<Record<number, number>> {
   const prodRes = await sendAPIGET(`meal_productions/?after=${rangeBegin}&before=${rangeEnd}`);
@@ -388,12 +514,13 @@ const Logo: React.FC = () => {
   );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, setIsOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, setIsOpen, onLogout }) => {
   /* --- HOOKS & STATE --- */
   const navItems = [
     { id: SIDEBAR_IDS.SHOPPING_LIST_NAME, icon: <ScrollText size={20} />, label: SHOPPING_LIST_NAME },
     { id: SIDEBAR_IDS.RECIPES_NAME, icon: <Utensils size={20} />, label: RECIPES_NAME },
     { id: SIDEBAR_IDS.PRODUCTS_NAME, icon: <AppleIcon size={20} />, label: PRODUCTS_NAME },
+    { id: SIDEBAR_IDS.BRANDSANDSHELVES_NAME, icon: <ShoppingCart size={20} />, label: BRANDSANDSHELVES_NAME },
     { id: SIDEBAR_IDS.PLANNING_NAME, icon: <Calendar size={20} />, label: PLANNING_NAME },
   ];
 
@@ -449,9 +576,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, setIsOp
         </nav>
 
         <div className="mt-auto px-6">
-          <a href="#" className="flex items-center py-2 text-tertiary font-medium text-sm">
-            <LogOut size={18} className="mr-3" /> Déconnexion
-          </a>
+          <button
+        type="button"
+        onClick={onLogout}
+        className="flex items-center w-full py-2 text-tertiary font-medium text-sm hover:opacity-80 transition-opacity"
+      >
+        <LogOut size={18} className="mr-3" /> Déconnexion
+      </button>
         </div>
       </aside>
     </>
@@ -601,17 +732,18 @@ const ShoppingRow: React.FC<ShoppingRowProps> = ({
         }`}
       >
         <td className="px-6 py-4">
-          <div className="gap-4 flex items-center justify-left">
+          <div className="gap-3 flex items-center justify-start">
             <motion.div
               animate={{ rotate: isOpen ? 90 : 0 }}
-              className="text-on-surface-variant"
+              className="text-on-surface-variant shrink-0"
             >
               <ChevronRight size={18} />
             </motion.div>
-            <div className="flex flex-col">
+
+            <div className="flex flex-col min-w-0">
               {isEditingDate ? (
                 <div
-                  className="flex items-center gap-1.5 py-0.5"
+                  className="flex items-center gap-1.5 py-0.5 flex-wrap"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <input
@@ -629,30 +761,33 @@ const ShoppingRow: React.FC<ShoppingRowProps> = ({
                     autoFocus
                     className="px-2 py-1 bg-surface border border-primary rounded text-xs text-on-surface outline-none focus:ring-1 focus:ring-primary shadow-xs"
                   />
-                  <button
-                    type="button"
-                    onClick={handleSaveDate}
-                    className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
-                    title="Enregistrer la date prévisionnelle"
-                  >
-                    <Save size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditDateVal(list.shopping_date || '');
-                      setIsEditingDate(false);
-                    }}
-                    className="p-1 text-on-surface-variant hover:bg-surface-container-high rounded transition-colors"
-                    title="Annuler"
-                  >
-                    <X size={14} />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleSaveDate}
+                      className="p-1 text-primary hover:bg-primary/10 rounded transition-colors"
+                      title="Enregistrer la date prévisionnelle"
+                    >
+                      <Save size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditDateVal(list.shopping_date || '');
+                        setIsEditingDate(false);
+                      }}
+                      className="p-1 text-on-surface-variant hover:bg-surface-container-high rounded transition-colors"
+                      title="Annuler"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 group/date">
+                /* --- CHANGEMENT MAJEUR ICI : flex-wrap + shrink-0 pour préserver le badge --- */
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
                   <span
-                    className={`font-medium text-sm ${
+                    className={`font-medium text-sm whitespace-nowrap ${
                       isHighlightToday
                         ? 'text-primary font-bold'
                         : isDimmed
@@ -668,16 +803,19 @@ const ShoppingRow: React.FC<ShoppingRowProps> = ({
                         })
                       : '—'}
                   </span>
+
                   {isHighlightToday && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary text-white shadow-xs">
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary text-white shadow-xs">
                       Aujourd'hui
                     </span>
                   )}
+
                   {isPast && !isCompleted && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-surface-container text-on-surface-variant/70">
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-surface-container text-on-surface-variant/70">
                       Passée
                     </span>
                   )}
+
                   {onUpdatePlannedDate && (
                     <button
                       type="button"
@@ -685,7 +823,7 @@ const ShoppingRow: React.FC<ShoppingRowProps> = ({
                         e.stopPropagation();
                         setIsEditingDate(true);
                       }}
-                      className="opacity-0 group-hover/date:opacity-100 p-1 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded transition-all"
+                      className="shrink-0 opacity-0 group-hover/date:opacity-100 p-1 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded transition-all"
                       title="Modifier la date des courses prévues"
                     >
                       <Pencil size={12} />
@@ -693,8 +831,9 @@ const ShoppingRow: React.FC<ShoppingRowProps> = ({
                   )}
                 </div>
               )}
+
               {(list.range_begin || list.range_end) && (
-                <span className="text-[10px] text-on-surface-variant/70">
+                <span className="text-[10px] text-on-surface-variant/70 whitespace-nowrap mt-0.5">
                   Période : {list.range_begin ? new Date(list.range_begin).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''} - {list.range_end ? new Date(list.range_end).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''}
                 </span>
               )}
@@ -2491,6 +2630,343 @@ const ProductsView: React.FC = () => {
   );
 };
 
+export const BrandsAndShelvesView: React.FC = () => {
+  /* --- HOOKS & STATE --- */
+  const [activeTab, setActiveTab] = useState<'brands' | 'shelves'>('brands');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [persistedBrands, setPersistedBrands] = useState<Brand[]>([]);
+
+  const [shelves, setShelves] = useState<Shelf[]>([]);
+  const [persistedShelves, setPersistedShelves] = useState<Shelf[]>([]);
+
+  const hasUnsavedBrand = useMemo(() => brands.some((b) => b.id === 0), [brands]);
+  const hasUnsavedShelf = useMemo(() => shelves.some((s) => s.id === 0), [shelves]);
+
+  /* --- DATA FETCHING --- */
+  const loadBrands = async () => {
+    try {
+      const data = await fetchBrandsApi();
+      setBrands(data);
+      setPersistedBrands(data);
+    } catch (err) {
+      console.error('Error loading brands:', err);
+    }
+  };
+
+  const loadShelves = async () => {
+    try {
+      const data = await fetchShelvesApi();
+      setShelves(data);
+      setPersistedShelves(data);
+    } catch (err) {
+      console.error('Error loading shelves:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadBrands();
+    loadShelves();
+  }, []);
+
+  /* --- BRAND HANDLERS --- */
+  const addBrand = () => {
+    if (hasUnsavedBrand) return;
+    setBrands((prev) => [...prev, { id: 0, name: '' }]);
+  };
+
+  const updateBrandName = (id: number, name: string) => {
+    setBrands((prev) => prev.map((b) => (b.id === id ? { ...b, name } : b)));
+  };
+
+  const handleSaveBrand = async (brand: Brand) => {
+    if (!brand.name.trim()) {
+      alert('Le nom de la marque ne peut pas être vide.');
+      return;
+    }
+    try {
+      const saved = await saveBrandApi(brand);
+      setBrands((prev) => prev.map((b) => (b.id === brand.id ? saved : b)));
+      setPersistedBrands((prev) => {
+        const exists = prev.some((p) => p.id === saved.id);
+        return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved];
+      });
+    } catch (err) {
+      console.error('Error saving brand:', err);
+      alert('Erreur lors de la sauvegarde de la marque.');
+    }
+  };
+
+  const handleDeleteBrand = async (id: number) => {
+    if (id === 0) {
+      setBrands((prev) => prev.filter((b) => b.id !== 0));
+      return;
+    }
+    try {
+      const res = await deleteBrandApi(id);
+      if (res.ok || res.status === 204) {
+        setBrands((prev) => prev.filter((b) => b.id !== id));
+        setPersistedBrands((prev) => prev.filter((b) => b.id !== id));
+      } else if (res.status === 422) {
+        alert('Impossible de supprimer cette marque car elle est attribuée à des ingrédients.');
+      } else {
+        alert(`Erreur lors de la suppression (${res.status})`);
+      }
+    } catch (err) {
+      console.error(`Error deleting brand ${id}:`, err);
+    }
+  };
+
+  /* --- SHELF HANDLERS --- */
+  const addShelf = () => {
+    if (hasUnsavedShelf) return;
+    setShelves((prev) => [...prev, { id: 0, name: '' }]);
+  };
+
+  const updateShelfName = (id: number, name: string) => {
+    setShelves((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+  };
+
+  const handleSaveShelf = async (shelf: Shelf) => {
+    if (!shelf.name.trim()) {
+      alert('Le nom du rayon ne peut pas être vide.');
+      return;
+    }
+    try {
+      const saved = await saveShelfApi(shelf);
+      setShelves((prev) => prev.map((s) => (s.id === shelf.id ? saved : s)));
+      setPersistedShelves((prev) => {
+        const exists = prev.some((p) => p.id === saved.id);
+        return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved];
+      });
+    } catch (err) {
+      console.error('Error saving shelf:', err);
+      alert('Erreur lors de la sauvegarde du rayon.');
+    }
+  };
+
+  const handleDeleteShelf = async (id: number) => {
+    if (id === 0) {
+      setShelves((prev) => prev.filter((s) => s.id !== 0));
+      return;
+    }
+    try {
+      const res = await deleteShelfApi(id);
+      if (res.ok || res.status === 204) {
+        setShelves((prev) => prev.filter((s) => s.id !== id));
+        setPersistedShelves((prev) => prev.filter((s) => s.id !== id));
+      } else if (res.status === 422) {
+        alert('Impossible de supprimer ce rayon car il est utilisé par des ingrédients.');
+      } else {
+        alert(`Erreur lors de la suppression (${res.status})`);
+      }
+    } catch (err) {
+      console.error(`Error deleting shelf ${id}:`, err);
+    }
+  };
+
+  /* --- FILTERED LISTS --- */
+  const filteredBrands = brands.filter(
+    (b) => b.id === 0 || b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredShelves = shelves.filter(
+    (s) => s.id === 0 || s.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  /* --- RENDER --- */
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="max-w-4xl mx-auto w-full"
+    >
+      <header className="mb-6">
+        <h2 className="text-4xl font-medium tracking-tight">{BRANDSANDSHELVES_NAME}</h2>
+      </header>
+
+      {/* TABS NAVIGATION */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => { setActiveTab('brands'); setSearchQuery(''); }}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all cursor-pointer ${
+            activeTab === 'brands'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
+          }`}
+        >
+          <Tag size={16} />
+          Marques ({brands.length})
+        </button>
+        <button
+          onClick={() => { setActiveTab('shelves'); setSearchQuery(''); }}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all cursor-pointer ${
+            activeTab === 'shelves'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
+          }`}
+        >
+          <Layers size={16} />
+          Rayons ({shelves.length})
+        </button>
+      </div>
+
+      <div className="p-4 h-full flex flex-col gap-4 bg-surface-container-lowest rounded-xl shadow-sm">
+        {/* SEARCH BAR */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant size-4" />
+          <input
+            className="w-full pl-10 pr-4 py-2 bg-surface-container rounded-full focus:ring-2 focus:ring-primary-light/50 text-sm placeholder:text-on-surface-variant/60"
+            placeholder={activeTab === 'brands' ? 'Chercher une marque...' : 'Chercher un rayon...'}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* BRANDS VIEW */}
+        {activeTab === 'brands' && (
+          <div className="flex-col space-y-3">
+            <AnimatePresence initial={false}>
+              {filteredBrands.map((brand) => {
+                const isDirty = isBrandDirty(brand, persistedBrands);
+                return (
+                  <motion.div
+                    key={brand.id}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="grid grid-cols-[1fr_auto] gap-3 p-3 items-center bg-surface-container-low/50 rounded-lg overflow-hidden"
+                  >
+                    <div className="w-full">
+                      <label className="block px-1 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        Marque
+                      </label>
+                      <ClickToEdit
+                        initialValue={brand.name}
+                        placeholder="Nom de la marque"
+                        onSave={(newValue) => updateBrandName(brand.id, newValue)}
+                      />
+                    </div>
+
+                    <div className="flex justify-end items-center gap-2">
+                      <button
+                        onClick={() => handleSaveBrand(brand)}
+                        disabled={!isDirty}
+                        className={`p-2 transition-colors rounded-md ${
+                          isDirty
+                            ? 'text-primary hover:bg-primary/10 cursor-pointer'
+                            : 'text-on-surface-variant/30 cursor-not-allowed'
+                        }`}
+                        title={isDirty ? 'Enregistrer les modifications' : 'Aucune modification'}
+                      >
+                        <Save size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBrand(brand.id)}
+                        className="p-2 text-tertiary/40 hover:text-tertiary transition-colors rounded-md cursor-pointer"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* SHELVES VIEW */}
+        {activeTab === 'shelves' && (
+          <div className="flex-col space-y-3">
+            <AnimatePresence initial={false}>
+              {filteredShelves.map((shelf) => {
+                const isDirty = isShelfDirty(shelf, persistedShelves);
+                return (
+                  <motion.div
+                    key={shelf.id}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="grid grid-cols-[1fr_auto] gap-3 p-3 items-center bg-surface-container-low/50 rounded-lg overflow-hidden"
+                  >
+                    <div className="w-full">
+                      <label className="block px-1 mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        Rayon
+                      </label>
+                      <ClickToEdit
+                        initialValue={shelf.name}
+                        placeholder="Nom du rayon"
+                        onSave={(newValue) => updateShelfName(shelf.id, newValue)}
+                      />
+                    </div>
+
+                    <div className="flex justify-end items-center gap-2">
+                      <button
+                        onClick={() => handleSaveShelf(shelf)}
+                        disabled={!isDirty}
+                        className={`p-2 transition-colors rounded-md ${
+                          isDirty
+                            ? 'text-primary hover:bg-primary/10 cursor-pointer'
+                            : 'text-on-surface-variant/30 cursor-not-allowed'
+                        }`}
+                        title={isDirty ? 'Enregistrer les modifications' : 'Aucune modification'}
+                      >
+                        <Save size={20} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteShelf(shelf.id)}
+                        className="p-2 text-tertiary/40 hover:text-tertiary transition-colors rounded-md cursor-pointer"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* ADD BUTTON */}
+        <div className="flex justify-between items-center pt-2">
+          {activeTab === 'brands' ? (
+            <button
+              onClick={addBrand}
+              disabled={hasUnsavedBrand}
+              className={`flex items-center gap-2 font-semibold text-sm transition-all ${
+                hasUnsavedBrand
+                  ? 'text-on-surface-variant/40 cursor-not-allowed opacity-50'
+                  : 'text-primary hover:opacity-80 cursor-pointer'
+              }`}
+            >
+              <PlusCircle size={16} />
+              Ajouter une marque
+            </button>
+          ) : (
+            <button
+              onClick={addShelf}
+              disabled={hasUnsavedShelf}
+              className={`flex items-center gap-2 font-semibold text-sm transition-all ${
+                hasUnsavedShelf
+                  ? 'text-on-surface-variant/40 cursor-not-allowed opacity-50'
+                  : 'text-primary hover:opacity-80 cursor-pointer'
+              }`}
+            >
+              <PlusCircle size={16} />
+              Ajouter un rayon
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 const PlanningView: React.FC = () => {
   /* --- HOOKS & STATE --- */
   const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
@@ -2893,8 +3369,29 @@ const PlanningView: React.FC = () => {
 
 export default function App() {
   /* --- HOOKS & STATE --- */
+  const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
+    const token = localStorage.getItem('google_token');
+    if (!token || !isTokenValid(token)) return null;
+
+    try {
+      const payload = parseJwtPayload(token);
+      if (ALLOWED_DOMAIN && payload.hd !== ALLOWED_DOMAIN) return null;
+      return { email: payload.email, name: payload.name };
+    } catch {
+      return null;
+    }
+  });
+
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewType>(SIDEBAR_IDS.SHOPPING_LIST_NAME);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!user);
+  
+  const handleLogout = () => {
+    localStorage.removeItem('google_token');
+    setUser(null);
+    setIsAuthenticated(false);
+  };
 
   useEffect(() => {
     if (isSidebarOpen) {
@@ -2908,7 +3405,73 @@ export default function App() {
     };
   }, [isSidebarOpen]);
 
-  /* --- RENDER --- */
+  /* --- AUTH HANDLER --- */
+  const handleGoogleSuccess = (credentialResponse: any) => {
+    setError(null);
+    const token = credentialResponse?.credential;
+
+    if (!token) {
+      setError('Aucun jeton de connexion reçu.');
+      return;
+    }
+
+    try {
+      const payload = parseJwtPayload(token);
+
+      if (ALLOWED_DOMAIN && payload.hd !== ALLOWED_DOMAIN) {
+        throw new Error(`Accès réservé aux comptes @${ALLOWED_DOMAIN}`);
+      }
+
+      if (!isTokenValid(token)) {
+        throw new Error('Jeton d\'authentification expiré.');
+      }
+
+      localStorage.setItem('google_token', token);
+      setUser({
+        email: payload.email,
+        name: payload.name,
+      });
+      setIsAuthenticated(true);
+    } catch (err: any) {
+      localStorage.removeItem('google_token');
+      setIsAuthenticated(false);
+      setUser(null);
+      setError(err.message || 'Erreur lors de la connexion');
+    }
+  };
+
+  /* --- DISCONNECTED --- */
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-surface-container-low p-8 rounded-2xl shadow-lg text-center border border-outline-variant/15">
+          <div className="flex justify-center mb-6">
+            <Logo />
+          </div>
+          <h1 className="text-xl font-semibold text-on-surface mb-2">Accès Restreint</h1>
+          <p className="text-sm text-on-surface-variant mb-6">
+            Connectez-vous avec votre compte tn.net pour accéder à la sandwichotek.
+          </p>
+
+          <div className="flex justify-center mb-4">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Google auth failed')}
+              hosted_domain={ALLOWED_DOMAIN}
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-error bg-error-container/20 p-2 rounded-lg mt-4">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* --- MAIN RENDER --- */
   return (
     <div className="min-h-screen flex bg-surface">
       <Sidebar
@@ -2916,6 +3479,7 @@ export default function App() {
         setView={setView}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1 min-h-screen flex flex-col lg:ml-64 transition-all">
@@ -2939,6 +3503,8 @@ export default function App() {
               <RecipeCreatorView key={SIDEBAR_IDS.RECIPES_NAME} />
             ) : view === SIDEBAR_IDS.PRODUCTS_NAME ? (
               <ProductsView key={SIDEBAR_IDS.PRODUCTS_NAME} />
+            ) : view === SIDEBAR_IDS.BRANDSANDSHELVES_NAME ?(
+              <BrandsAndShelvesView key={SIDEBAR_IDS.BRANDSANDSHELVES_NAME} />
             ) : (
               <PlanningView key={SIDEBAR_IDS.PLANNING_NAME} />
             )}
