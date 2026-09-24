@@ -20,6 +20,9 @@ import {
   Layers,
   ShoppingCart,
   Save,
+  Users,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
@@ -41,6 +44,7 @@ const RECIPES_NAME = 'Recettes';
 const PRODUCTS_NAME = 'Produits';
 const BRANDSANDSHELVES_NAME = 'Marques & Rayons';
 const PLANNING_NAME = 'Planning hebdomadaire';
+const USERS_NAME = 'Administration';
 
 const SIDEBAR_IDS = {
   SHOPPING_LIST_NAME: 'shoppinglist',
@@ -48,9 +52,10 @@ const SIDEBAR_IDS = {
   PRODUCTS_NAME: 'products',
   BRANDSANDSHELVES_NAME: 'brandsandshelves',
   PLANNING_NAME: 'planning',
+  USERS_NAME: 'administration',
 } as const;
 
-type ViewType = 'shoppinglist' | 'recipes' | 'products' | 'brandsandshelves' | 'planning';
+type ViewType = 'shoppinglist' | 'recipes' | 'products' | 'brandsandshelves' | 'planning' | 'administration';
 
 interface Ingredient {
   id: number;
@@ -180,6 +185,12 @@ interface ShoppingRowProps {
   availableIngredients: AvailableIngredient[];
 }
 
+export interface User {
+  id: number;
+  email: string;
+  is_active: boolean;
+}
+
 /* ==========================================================================
    HELPERS & UTILS
    ========================================================================== */
@@ -230,6 +241,43 @@ export const getInitialPlanningDate = (referenceDate = new Date()): Date => {
     return nextMonday;
   }
   return d;
+};
+
+export const fetchUsersApi = async (): Promise<User[]> => {
+  const res = await sendAPIGET('users/');
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch users: ${res.status} ${text}`);
+  }
+  const json = await res.json();
+  if (!Array.isArray(json)) return [];
+  return json.map((it: any) => ({
+    id: it.id ?? 0,
+    email: it.email ?? '',
+    is_active: Boolean(it.is_active),
+  }));
+};
+
+export const createUserApi = async (email: string, isActive: boolean = true): Promise<User> => {
+  const res = await sendAPIPOST('users/', { email, is_active: isActive });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to create user (${res.status}): ${text}`);
+  }
+  return await res.json();
+};
+
+export const updateUserActiveApi = async (id: number, isActive: boolean): Promise<User> => {
+  const res = await sendAPIPUT(`users/${id}`, { is_active: isActive });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to update user status (${res.status}): ${text}`);
+  }
+  return await res.json();
+};
+
+export const deleteUserApi = async (id: number): Promise<Response> => {
+  return await sendAPIDELETE(`users/${id}`);
 };
 
 export const isIngredientDirty = (ing: Ingredient, persistedIngredients: Ingredient[]): boolean => {
@@ -519,6 +567,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, setIsOp
     { id: SIDEBAR_IDS.PRODUCTS_NAME, icon: <AppleIcon size={20} />, label: PRODUCTS_NAME },
     { id: SIDEBAR_IDS.BRANDSANDSHELVES_NAME, icon: <ShoppingCart size={20} />, label: BRANDSANDSHELVES_NAME },
     { id: SIDEBAR_IDS.PLANNING_NAME, icon: <Calendar size={20} />, label: PLANNING_NAME },
+    { id: SIDEBAR_IDS.USERS_NAME, icon: <Users size={20} />, label: USERS_NAME },
   ];
 
   /* --- RENDER --- */
@@ -3408,6 +3457,232 @@ const PlanningView: React.FC = () => {
   );
 };
 
+export const UsersView: React.FC = () => {
+  /* --- HOOKS & STATE --- */
+  const [users, setUsers] = useState<User[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [newEmail, setNewEmail] = useState<string>('');
+  const [isCreating, setIsCreating] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  /* --- DATA FETCHING --- */
+  const loadUsers = async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchUsersApi();
+      setUsers(data);
+    } catch (err) {
+      console.error('Error loading users:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  /* --- HANDLERS --- */
+  const handleToggleActive = async (user: User) => {
+    const updatedStatus = !user.is_active;
+
+    // Optimistic UI update
+    setUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, is_active: updatedStatus } : u))
+    );
+
+    try {
+      await updateUserActiveApi(user.id, updatedStatus);
+    } catch (err) {
+      console.error(`Error toggling status for user ${user.id}:`, err);
+      // Rollback on failure
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, is_active: user.is_active } : u))
+      );
+      alert('Failed to update user status.');
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const created = await createUserApi(newEmail.trim(), true);
+      setUsers((prev) => [...prev, created]);
+      setNewEmail('');
+    } catch (err: any) {
+      console.error('Error creating user:', err);
+      alert(err.message || 'Error creating user.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    try {
+      const res = await deleteUserApi(id);
+      if (res.ok || res.status === 204) {
+        setUsers((prev) => prev.filter((u) => u.id !== id));
+      } else {
+        alert(`Failed to delete user (${res.status}).`);
+      }
+    } catch (err) {
+      console.error(`Error deleting user ${id}:`, err);
+    }
+  };
+
+  /* --- FILTERED USERS --- */
+  const filteredUsers = useMemo(() => {
+    return users
+      .filter((u) => u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => a.email.localeCompare(b.email));
+  }, [users, searchQuery]);
+
+  /* --- RENDER --- */
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="max-w-4xl mx-auto w-full"
+    >
+      <header className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-4xl font-medium tracking-tight">{USERS_NAME}</h2>
+        </div>
+        <div className="flex items-center gap-2 bg-surface-container-high px-3 py-1.5 rounded-full text-xs font-semibold text-on-surface-variant">
+          <Users size={16} />
+          <span>{users.length} utilisateurs</span>
+        </div>
+      </header>
+
+      <div className="p-4 flex flex-col gap-4 bg-surface-container-lowest rounded-xl shadow-sm">
+        {/* ADD USER FORM */}
+        <form onSubmit={handleCreateUser} className="flex gap-3 items-center">
+          <div className="relative flex-1">
+            <input
+              type="email"
+              required
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="Entrez une nouvelle adresse mail..."
+              className="w-full px-4 py-2.5 bg-surface-container rounded-lg text-sm text-on-surface border border-outline-variant/30 focus:ring-2 focus:ring-primary-light/50 outline-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isCreating || !newEmail.trim()}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white signature-gradient shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>{isCreating ? 'Ajout...' : 'Ajouter un utilisateur'}</span>
+          </button>
+        </form>
+
+        <hr className="border-outline-variant/20" />
+
+        {/* SEARCH BAR */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant size-4" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Chercher un utilisateur..."
+            className="w-full pl-10 pr-4 py-2 bg-surface-container rounded-full focus:ring-2 focus:ring-primary-light/50 text-sm placeholder:text-on-surface-variant/60 outline-none"
+          />
+        </div>
+
+        {/* USER LIST */}
+        <div className="flex flex-col space-y-3 mt-2">
+          {isLoading ? (
+            <div className="py-8 text-center text-sm text-on-surface-variant">
+              Chargement des utilisateurs...
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="py-8 text-center text-sm text-on-surface-variant">
+              Aucun utilisateur.
+            </div>
+          ) : (
+            <AnimatePresence initial={false}>
+              {filteredUsers.map((user) => (
+                <motion.div
+                  key={user.id}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="grid grid-cols-[1fr_auto_auto] gap-4 p-3.5 items-center bg-surface-container-low/50 hover:bg-surface-container-low rounded-xl transition-colors overflow-hidden"
+                >
+                  {/* EMAIL DISPLAY (READ ONLY) */}
+                  <div className="flex items-center gap-3 min-w-0 px-2">
+                    <div className={`p-2 rounded-lg ${user.is_active ? 'bg-primary/10 text-primary' : 'bg-surface-container text-on-surface-variant'}`}>
+                      {user.is_active ? <UserCheck size={18} /> : <UserX size={18} />}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-semibold text-on-surface truncate">
+                        {user.email}
+                      </span>
+                      <span className="text-[10px] font-mono text-on-surface-variant/70">
+                        ID: #{String(user.id).padStart(4, '0')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ACTIVE STATUS TOGGLE */}
+                  <div className="flex items-center px-2">
+                    <label className="inline-flex items-center gap-3 cursor-pointer">
+                      <span className={`text-xs font-semibold ${user.is_active ? 'text-primary' : 'text-on-surface-variant/70'}`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={user.is_active}
+                        onChange={() => handleToggleActive(user)}
+                        className="sr-only peer"
+                      />
+                      <div
+                        className="relative w-11 h-6 rounded-full peer 
+                          bg-surface-container-high 
+                          transition-colors duration-300 ease-in-out
+                          peer-checked:bg-primary 
+                          peer-focus:outline-none 
+                          after:content-[''] 
+                          after:absolute 
+                          after:top-[4px] 
+                          after:start-[4px] 
+                          after:bg-white 
+                          after:rounded-full 
+                          after:h-4 
+                          after:w-4 
+                          after:transition-transform after:duration-300 after:ease-in-out
+                          peer-checked:after:translate-x-5"
+                      />
+                    </label>
+                  </div>
+
+                  {/* DELETE ACTION */}
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="p-2 text-tertiary/40 hover:text-tertiary hover:bg-tertiary/10 rounded-lg transition-colors cursor-pointer"
+                      title="Supprimer l'utilisaateur"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 /* ==========================================================================
    MAIN COMPONENT
    ========================================================================== */
@@ -3550,6 +3825,8 @@ export default function App() {
               <ProductsView key={SIDEBAR_IDS.PRODUCTS_NAME} />
             ) : view === SIDEBAR_IDS.BRANDSANDSHELVES_NAME ?(
               <BrandsAndShelvesView key={SIDEBAR_IDS.BRANDSANDSHELVES_NAME} />
+            ) : view === SIDEBAR_IDS.USERS_NAME ?(
+              <UsersView key={SIDEBAR_IDS.USERS_NAME} />
             ) : (
               <PlanningView key={SIDEBAR_IDS.PLANNING_NAME} />
             )}

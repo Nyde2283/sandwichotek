@@ -222,3 +222,24 @@ class ShoppingItemPublicVerbose(ShoppingItemPublic):
 class ShoppingItemUpdate(SQLModel):
     quantity: float | None = None
     bought: bool | None = None
+
+# ---------------------------------------------------------------------------- #
+
+class User(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    is_active: bool = Field(default=True)
+
+class UserCreate(SQLModel):
+    email: str
+    is_active: bool = True
+
+
+class UserUpdateActive(SQLModel):
+    is_active: bool
+
+
+class UserPublic(SQLModel):
+    id: int
+    email: str
+    is_active: bool
