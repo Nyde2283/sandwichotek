@@ -653,7 +653,23 @@ const ShoppingRow: React.FC<ShoppingRowProps> = ({
   availableIngredients,
 }) => {
   /* --- HOOKS & STATE --- */
-  const items = list.shopping_items || [];
+  const items = useMemo(() => {
+    return [...(list.shopping_items ?? [])].sort((a, b) => {
+      const shelfA = a.ingredient?.shelf?.name || '—';
+      const shelfB = b.ingredient?.shelf?.name || '—';
+
+      // 2. Comparaison par rayon
+      const shelfComparison = shelfA.localeCompare(shelfB, 'fr');
+      if (shelfComparison !== 0) {
+        return shelfComparison;
+      }
+
+      // 3. Si même rayon, tri secondaire par nom d'ingrédient
+      const nameA = a.ingredient?.name || `Ingrédient #${a.ingredient_id} (erreur)`;
+      const nameB = b.ingredient?.name || `Ingrédient #${b.ingredient_id} (erreur)`;
+      return nameA.localeCompare(nameB, 'fr');
+    });
+  }, [list.shopping_items]);
   const boughtCount = items.filter((i) => i.bought).length;
 
   const todayStr = getTodayDateString();
@@ -2079,6 +2095,14 @@ const RecipeCreatorView: React.FC = () => {
     }
   };
 
+  const sortedIngredients = useMemo(() => {
+    return [...ingredients].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [ingredients]);
+
+  const sortedMeals = useMemo(() => {
+    return [...meals].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [meals]);
+
   /* --- RENDER --- */
   return (
     <motion.div
@@ -2101,7 +2125,7 @@ const RecipeCreatorView: React.FC = () => {
                 className="w-full appearance-none bg-surface-container-low rounded-lg border-none p-2 px-10 text-center [text-align-last:center] text-4xl font-medium tracking-tight text-on-surface cursor-pointer outline-none focus:ring-0"
               >
                 <option value={0}>Nouvelle recette</option>
-                {meals.map((meal) => (
+                {sortedMeals.map((meal) => (
                   <option
                     key={meal.id}
                     value={meal.id}
@@ -2180,7 +2204,7 @@ const RecipeCreatorView: React.FC = () => {
                           }
                           className="w-full px-4 py-3 rounded-lg appearance-none bg-white text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer"
                         >
-                          {ingredients.map((ingredient) => (
+                          {sortedIngredients.map((ingredient) => (
                             <option key={ingredient.id} value={ingredient.id}>
                               {ingredient.name}
                             </option>
@@ -2461,11 +2485,23 @@ const ProductsView: React.FC = () => {
     }
   };
 
-  const filteredIngredients = ingredients.filter(
+  const sortedIngredients = useMemo(() => {
+    return [...ingredients].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [ingredients]);
+
+  const filteredIngredients = sortedIngredients.filter(
     (ing) =>
       ing.id === 0 ||
       ing.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const sortedBrands = useMemo(() => {
+    return [...brands].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [brands]);
+
+  const sortedShelves = useMemo(() => {
+    return [...shelves].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [shelves]);
 
   /* --- RENDER --- */
   return (
@@ -2542,7 +2578,7 @@ const ProductsView: React.FC = () => {
                         className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
                       >
                         <option value={0}>Aucune marque</option>
-                        {brands.map((brand) => (
+                        {sortedBrands.map((brand) => (
                           <option key={brand.id} value={brand.id}>
                             {brand.name}
                           </option>
@@ -2568,7 +2604,7 @@ const ProductsView: React.FC = () => {
                         className="w-full appearance-none bg-white border-none rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary-light/50 pr-10 cursor-pointer outline-none"
                       >
                         <option value={0}>Aucun rayon</option>
-                        {shelves.map((shelf) => (
+                        {sortedShelves.map((shelf) => (
                           <option key={shelf.id} value={shelf.id}>
                             {shelf.name}
                           </option>
@@ -2764,11 +2800,19 @@ export const BrandsAndShelvesView: React.FC = () => {
   };
 
   /* --- FILTERED LISTS --- */
-  const filteredBrands = brands.filter(
+  const sortedBrands = useMemo(() => {
+    return [...brands].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [brands]);
+
+  const filteredBrands = sortedBrands.filter(
     (b) => b.id === 0 || b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredShelves = shelves.filter(
+  const sortedShelves = useMemo(() => {
+    return [...shelves].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [shelves]);
+
+  const filteredShelves = sortedShelves.filter(
     (s) => s.id === 0 || s.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -2974,6 +3018,10 @@ const PlanningView: React.FC = () => {
 
   const todayStr = useMemo(() => getTodayDateString(), []);
   const currentWeekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
+
+  const sortedMeals = useMemo(() => {
+    return [...mealsList].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [mealsList]);
 
   /* --- HANDLERS --- */
   const handlePreviousWeek = () => {
@@ -3291,7 +3339,7 @@ const PlanningView: React.FC = () => {
                           }
                           className="w-full appearance-none bg-surface-container border-none rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-light/50 pr-9 cursor-pointer outline-none font-semibold text-on-surface"
                         >
-                          {mealsList.map((m) => (
+                          {sortedMeals.map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.name}
                             </option>

@@ -15,7 +15,7 @@ RUN npm run build
 
 FROM nginx:alpine-slim
 
-ENV PORT=80
+ENV PORT=3000
 ENV API_URL=http://localhost
 ENV API_PORT=8080
 
