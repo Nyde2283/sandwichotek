@@ -3,8 +3,9 @@ from sqlmodel import Session, select
 from ..db.models import *
 from ..db import get_session
 from ..tools.response_models import *
+from ..tools.auth import *
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 def build_recipe(meal: Meal) -> Recipe:
     if not meal.id:

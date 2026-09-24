@@ -6,10 +6,12 @@ from ..db.models import *
 from ..db import get_session
 from ..tools.response_models import *
 from ..routers import recipes
+from ..tools.auth import *
 
 router = APIRouter(
     prefix="/meals",
-    tags=["Meals"]
+    tags=["Meals"],
+    dependencies=[Depends(verify_token)]
 )
 
 @router.post("/", response_model=MealPublic)

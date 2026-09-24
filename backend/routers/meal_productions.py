@@ -3,10 +3,12 @@ from sqlmodel import Session, select
 from ..db.models import *
 from ..db import get_session
 from ..tools.response_models import *
+from ..tools.auth import *
 
 router = APIRouter(
     prefix="/meal_productions",
-    tags=["Meal Productions"]
+    tags=["Meal Productions"],
+    dependencies=[Depends(verify_token)]
 )
 
 @router.post("/", response_model=MealProductionPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})

@@ -5,10 +5,12 @@ from sqlalchemy.exc import IntegrityError
 from ..db.models import *
 from ..db import get_session
 from ..tools.response_models import *
+from ..tools.auth import *
 
 router = APIRouter(
     prefix="/shelves",
-    tags=["Shelves"]
+    tags=["Shelves"],
+    dependencies=[Depends(verify_token)]
 )
 
 @router.post("/", response_model=ShelfPublicVerbose)

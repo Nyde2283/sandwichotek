@@ -3,9 +3,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy_data_model_visualizer import generate_data_model_diagram, add_web_font_and_interactivity
 from cairosvg import svg2png
 from ..db.models import db_tables
+from ..tools.auth import *
 
 router = APIRouter(
-    tags=["Misc"]
+    tags=["Misc"],
+    dependencies=[Depends(verify_token)]
 )
 
 @router.get("/")
