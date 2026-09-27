@@ -32,14 +32,11 @@ def verify_token(
 
         email = user_info.get("email", "").lower()
 
-        # 2. Vérification dans la liste blanche du .env
-        if ALLOWED_EMAILS and email in ALLOWED_EMAILS:
+        statement = select(User).where(User.email == email)
+        user = session.exec(statement).first()
 
-            # 3. Synchronisation avec la base de données
-            statement = select(User).where(User.email == email)
-            user = session.exec(statement).first()
-
-            if not user:
+        if not user:
+            if ALLOWED_EMAILS and email in ALLOWED_EMAILS:
                 user = User(
                     email=email,
                 )
@@ -47,6 +44,7 @@ def verify_token(
                 session.commit()
                 session.refresh(user)
 
+        if user:
             return user
 
         else:
