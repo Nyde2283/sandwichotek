@@ -33,10 +33,8 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 const ALLOWED_DOMAIN = "telecomnancy.net";
 
-const API_URL = (window as any).env?.API_URL || 'http://localhost';
-const API_PORT = (window as any).env?.API_PORT || '8000';
-
-export const BASE_API_URL = `${API_URL}:${API_PORT}`;
+const API_URL = (window as any).env?.API_URL || 'http://localhost:8000';
+export const BASE_API_URL = `${API_URL}`;
 
 const APP_NAME = 'Sandwichotek';
 const SHOPPING_LIST_NAME = 'Liste de courses';

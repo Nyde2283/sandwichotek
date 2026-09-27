@@ -17,7 +17,6 @@ FROM nginx:alpine-slim
 
 ENV PORT=3000
 ENV API_URL=http://localhost
-ENV API_PORT=8080
 
 #ENV NGINX_ENVSUBST_FILTER="PORT"
 

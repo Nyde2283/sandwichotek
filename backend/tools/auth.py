@@ -31,29 +31,29 @@ def verify_token(
         )
 
         email = user_info.get("email", "").lower()
-        name = user_info.get("name")
 
         # 2. Vérification dans la liste blanche du .env
-        if ALLOWED_EMAILS and email not in ALLOWED_EMAILS:
+        if ALLOWED_EMAILS and email in ALLOWED_EMAILS:
+
+            # 3. Synchronisation avec la base de données
+            statement = select(User).where(User.email == email)
+            user = session.exec(statement).first()
+
+            if not user:
+                user = User(
+                    email=email,
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+
+            return user
+
+        else:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"L'adresse email {email} n'est pas autorisée à accéder à l'application."
             )
-
-        # 3. Synchronisation avec la base de données
-        statement = select(User).where(User.email == email)
-        user = session.exec(statement).first()
-
-        if not user:
-            user = User(
-                email=email,
-                name=name
-            )
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-
-        return user
 
     except HTTPException:
         raise
