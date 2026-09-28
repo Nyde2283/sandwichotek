@@ -3,6 +3,7 @@ services:
     image: postgres:17
     profiles:
       - prod
+      - dev
     env_file:
       - .env
     environment:
