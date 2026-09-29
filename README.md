@@ -27,11 +27,11 @@ Sandwichotèque du bar de TELECOM Nancy
 
     Se connecter à Google Cloud Console, créer un projet, puis créer un client OAuth 2.0 pour une application web.
     
-    Ajouter `http://localhost:3000` comme *URI de redirection autorisés* et *Origines JavaScript autorisées*.
+    Ajouter l'url du frontend comme *URI de redirection autorisés* et *Origines JavaScript autorisées*.
     
     Copier l'ID du client et le mettre dans les 2 fichiers `.env` du backend et du frontend. (Id sous la forme `123456789-abdefghijk.apps.googleusercontent.com`)
 
-    Renseigner aussi `ALLOWED_EMAILS` avec un email que vous souhaitez autoriser à se connecter via Google OAuth. Si vous voulez autoriser plusieurs emails, vous pouvez les séparer par des virgules.
+    Renseigner aussi `ALLOWED_EMAILS` avec au moins un email que vous souhaitez autoriser à se connecter via Google OAuth. Si vous voulez autoriser plusieurs emails, vous pouvez les séparer par des virgules.
 
 4. **Initialiser les fichiers d'environnement :**
 
@@ -69,3 +69,7 @@ Sandwichotèque du bar de TELECOM Nancy
     cd frontend
     yarn dev # ou npm run dev
     ```
+
+7. **Compose run:**
+
+Run each compose: first backend in project root, then frontend in frontend/
