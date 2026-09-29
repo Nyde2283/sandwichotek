@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17
+    image: postgres:17-alpine
     profiles:
       - prod
       - dev
@@ -41,6 +41,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       APP_PORT: 8000
+    restart: unless-stopped
 
   test-db:
     image: postgres:17

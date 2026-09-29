@@ -16,7 +16,8 @@ RUN npm run build
 FROM nginx:alpine-slim
 
 ENV PORT=3000
-ENV API_URL=http://localhost
+
+ENV API_URL=http://127.0.0.1:8000
 
 #ENV NGINX_ENVSUBST_FILTER="PORT"
 
@@ -32,4 +33,4 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/conf.d/default.conf.template
 
-CMD ["/bin/sh", "-c", "echo \"window.env = { API_URL: '${API_URL}', API_PORT: '${API_PORT}' };\" > /usr/share/nginx/html/config.js && sed \"s/__PORT__/${PORT}/g\" /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "echo \"window.env = { API_URL: '${API_URL}' };\" > /usr/share/nginx/html/config.js && sed \"s/__PORT__/${PORT}/g\" /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
