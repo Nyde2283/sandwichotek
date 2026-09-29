@@ -1,0 +1,100 @@
+services:
+  db:
+    image: postgres:17-alpine
+    profiles:
+      - prod
+      - dev
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGPORT: 5432
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 0.5s
+      timeout: 1s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      target: release
+    profiles:
+      - prod
+    ports:
+      - "${APP_PORT}:8000"
+    volumes:
+      - ./backend:/sandwichotek/backend
+      - ./assets:/sandwichotek/assets
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      APP_PORT: 8000
+    restart: unless-stopped
+
+  test-db:
+    image: postgres:17
+    profiles:
+      - test
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGPORT: 5433
+    ports:
+      - "${TEST_DB_PORT}:5433"
+    tmpfs:
+      - /var/lib/postgresql/data:size=1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 0.5s
+      timeout: 1s
+      retries: 20
+    networks:
+      - test
+
+  test-backend:
+    build:
+      context: .
+      target: test
+    profiles:
+      - test
+    ports:
+      - "${TEST_APP_PORT}:8001"
+    volumes:
+      - ./backend:/sandwichotek/backend
+      - ./tests:/sandwichotek/tests
+      - ./assets:/sandwichotek/assets
+    env_file:
+      - .env
+    depends_on:
+      test-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: test-db
+      DB_PORT: 5433
+      APP_HOST: ${TEST_APP_HOST}
+      APP_PORT: 8001
+    networks:
+      - test
+
+volumes:
+  postgres_data:
+networks:
+  default:
+    name: sandwichotek_network
+  test:
+    name: sandwichotek_test_network

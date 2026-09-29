@@ -1,0 +1,82 @@
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.encoders import jsonable_encoder
+from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
+from ..db.models import *
+from ..db import get_session
+from ..tools.response_models import *
+from ..routers import recipes
+from ..tools.auth import *
+
+router = APIRouter(
+    prefix="/meals",
+    tags=["Meals"],
+    dependencies=[Depends(verify_token)]
+)
+
+@router.post("/", response_model=MealPublic)
+def create_meal(meal: MealCreate, session: Session = Depends(get_session)):
+    """Create a new meal."""
+    db_meal = Meal.model_validate(meal)
+    session.add(db_meal)
+    session.commit()
+    session.refresh(db_meal)
+    return db_meal
+
+@router.get("/",  response_model=list[MealPublic])
+def search_meals(q: str | None = None, veggy: bool | None = None, session: Session = Depends(get_session)):
+    """Search for meals by name or ID."""
+    statement = select(Meal)
+    if veggy is not None:
+        statement = statement.where(Meal.veggy == veggy)
+    if q is None:
+        return session.exec(statement).all()
+    if q.isdigit():
+        return session.exec(statement.where(Meal.id == int(q))).all()
+    else:
+        return session.exec(statement.where(Meal.name.ilike(f"%{q}%"))).all() # type: ignore
+
+@router.get("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+def get_meal_by_id(meal_id: int, session: Session = Depends(get_session)):
+    """Get a meal identified by its ID."""
+    meal = session.get(Meal, meal_id)
+    if not meal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")
+    session.refresh(meal)
+    return meal
+
+@router.put("/{meal_id}",  response_model=MealPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+def update_meal(meal_id: int, meal: MealUpdate, session: Session = Depends(get_session)):
+    """Update a meal identified by its ID."""
+    db_meal = session.get(Meal, meal_id)
+    if not db_meal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")
+    meal_data = meal.model_dump(exclude_unset=True)
+    db_meal.sqlmodel_update(meal_data)
+    session.add(db_meal)
+    session.commit()
+    session.refresh(db_meal)
+    return db_meal
+
+@router.delete("/{meal_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": HTTPUnprocessableContent_Meal}})
+def delete_meal(meal_id: int, session: Session = Depends(get_session)):
+    """Delete a meal identified by its ID."""
+    meal = session.get(Meal, meal_id)
+    if not meal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")
+    session.delete(meal)
+    try:
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "msg": "Foreign key violation ! Check 'blocking_recipe_items' and 'blocking_meal_productions' fields",
+                "blocking_recipe_items": jsonable_encoder(meal.recipe_items),
+                "blocking_meal_productions": jsonable_encoder(meal.meal_productions),
+                "original_error": str(error.orig)
+            }
+        )
+
+router.include_router(recipes.router)

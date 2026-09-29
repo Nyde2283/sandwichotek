@@ -1,0 +1,15 @@
+name: sandwichotek-frontend
+services:
+  sandwichotek-frontend:
+    container_name: sandwichotek-frontend
+    build:
+        context: .
+    networks:
+      - sandwichotek_network
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+
+networks:
+  sandwichotek_network:
+    external: true
