@@ -49,6 +49,9 @@ Sandwichotèque du bar de TELECOM Nancy
 
     Modifier au besoin le fichier `config.js` du frontend.
 
+
+    Dans frontend/Dockerfile, renseigner l'url de l'API.
+
 5. **Démarrer la base de données :**
 
     Utilisez une base de données PostgreSQL déja configurée ou utilisez Docker :
