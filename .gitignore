@@ -1,0 +1,16 @@
+.env
+__pycache__
+
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+*.tsbuildinfo
+yarn.lock
+package-lock.json

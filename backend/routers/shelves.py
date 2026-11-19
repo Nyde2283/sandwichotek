@@ -1,0 +1,75 @@
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.encoders import jsonable_encoder
+from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
+from ..db.models import *
+from ..db import get_session
+from ..tools.response_models import *
+from ..tools.auth import *
+
+router = APIRouter(
+    prefix="/shelves",
+    tags=["Shelves"],
+    dependencies=[Depends(verify_token)]
+)
+
+@router.post("/", response_model=ShelfPublicVerbose)
+def create_shelf(shelf: ShelfCreate, session: Session = Depends(get_session)):
+    """Create a new shelf."""
+    db_shelf = Shelf.model_validate(shelf)
+    session.add(db_shelf)
+    session.commit()
+    session.refresh(db_shelf)
+    return db_shelf
+
+@router.get("/",  response_model=list[ShelfPublicVerbose])
+def search_shelves(q: str | None = None, session: Session = Depends(get_session)):
+    """Search for shelves by name or ID."""
+    if q is None:
+        return session.exec(select(Shelf)).all()
+    if q.isdigit():
+        return session.exec(select(Shelf).where(Shelf.id == int(q))).all()
+    else:
+        return session.exec(select(Shelf).where(Shelf.name.ilike(f"%{q}%"))).all() # type: ignore
+
+@router.get("/{shelf_id}",  response_model=ShelfPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+def get_shelf_by_id(shelf_id: int, session: Session = Depends(get_session)):
+    """Get a shelf identified by its ID."""
+    shelf = session.get(Shelf, shelf_id)
+    if not shelf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
+    session.refresh(shelf)
+    return shelf
+
+@router.put("/{shelf_id}",  response_model=ShelfPublicVerbose, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}})
+def update_shelf(shelf_id: int, shelf: ShelfUpdate, session: Session = Depends(get_session)):
+    """Update a shelf identified by its ID."""
+    db_shelf = session.get(Shelf, shelf_id)
+    if not db_shelf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
+    shelf_data = shelf.model_dump(exclude_unset=True)
+    db_shelf.sqlmodel_update(shelf_data)
+    session.add(db_shelf)
+    session.commit()
+    session.refresh(db_shelf)
+    return db_shelf
+
+@router.delete("/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"model": HTTPNotFound}, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": HTTPUnprocessableContent_Shelf}})
+def delete_shelf(shelf_id: int, session: Session = Depends(get_session)):
+    """Delete a shelf identified by its ID."""
+    shelf = session.get(Shelf, shelf_id)
+    if not shelf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shelf not found")
+    session.delete(shelf)
+    try:
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "msg": "Foreign key violation ! Check 'blocking_ingredients' field",
+                "blocking_ingredients": jsonable_encoder(shelf.ingredients),
+                "original_error": str(error.orig)
+            }
+        )
